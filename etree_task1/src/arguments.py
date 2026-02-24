@@ -93,6 +93,33 @@ def get_args():
 
     parser.add_argument('--verbose', type=str2bool, default=True)
 
+    # MCTS / LLM backend parameters
+    parser.add_argument('--solver_backend', type=str, default='ppo', choices=['ppo', 'mcts'])
+    parser.add_argument('--mcts_simulations', type=int, default=50)
+    parser.add_argument('--mcts_max_depth', type=int, default=8)
+    parser.add_argument('--c_puct', type=float, default=1.5)
+    parser.add_argument('--llm_url', type=str, default='http://localhost:30000')
+    parser.add_argument('--llm_model', type=str, default='local-model')
+    parser.add_argument('--llm_timeout', type=int, default=30)
+    parser.add_argument('--llm_max_retry', type=int, default=2)
+    parser.add_argument('--mcts_fallback_reward', type=float, default=-0.2)
+    parser.add_argument('--mcts_trace_topk', type=int, default=3)
+
+    parser.add_argument('--mcts_weighted_return', type=str2bool, default=True)
+    parser.add_argument('--mcts_weight_mode', type=str, default='prior', choices=['prior', 'visit', 'hybrid'])
+    parser.add_argument('--mcts_entropy_ucb', type=str2bool, default=True)
+    parser.add_argument('--mcts_entropy_coef', type=float, default=1.0)
+    parser.add_argument('--mcts_strict_dag_backprop', type=str2bool, default=True)
+    parser.add_argument('--mcts_run_official_eval', type=str2bool, default=True)
+    parser.add_argument('--mcts_dag_update_mode', type=str, default='value_only', choices=['value_only', 'visit_and_value'])
+    parser.add_argument('--mcts_rollout_policy', type=str, default='max_ucb', choices=['max_ucb', 'max_prior', 'sample'])
+    parser.add_argument('--mcts_reward_backend', type=str, default='llm_judge_discrete', choices=['llm_judge_discrete', 'llm_judge_soft', 'heuristic_soft'])
+    parser.add_argument('--mcts_objective_mode', type=str, default='graph_td', choices=['seer', 'graph_td', 'conservative'])
+    parser.add_argument('--mcts_entropy_source', type=str, default='hybrid', choices=['prior', 'posterior', 'hybrid'])
+    parser.add_argument('--mcts_backup_operator', type=str, default='mean', choices=['mean', 'max', 'softmax'])
+    parser.add_argument('--mcts_backup_tau', type=float, default=1.0)
+    parser.add_argument('--mcts_ci_alpha', type=float, default=0.05)
+
     args = parser.parse_args()  # 解析参数
 
     # 时间戳后缀，
