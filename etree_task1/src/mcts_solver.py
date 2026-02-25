@@ -69,6 +69,7 @@ class MCTSSolver:
             "weighted_parent_terms": 0,
             "weighted_max_weight_mean": 0.0,
             "weighted_parent_count_mean": 0.0,
+            "weighted_entropy_mean": 0.0,
         }
 
     def search(self, initial_data_item):
@@ -236,6 +237,11 @@ class MCTSSolver:
                 w = max(1e-6, float(parent.visits))
             elif self.weight_mode == "hybrid":
                 w = max(1e-6, float(parent.visits) * prior)
+            elif self.weight_mode == "inv_var":
+                # inverse-variance proxy: reliable parents should get larger weights.
+                # We use visit-scaled uncertainty as a practical estimator.
+                uncertainty = 1.0 / max(1.0, float(parent.visits))
+                w = max(1e-6, 1.0 / max(uncertainty, 1e-6))
             else:
                 w = max(1e-6, prior)
             weights.append(w)
@@ -248,6 +254,7 @@ class MCTSSolver:
         self.stats["weighted_parent_terms"] += 1
         self.stats["weighted_max_weight_mean"] += max(norm_weights)
         self.stats["weighted_parent_count_mean"] += len(parent_vals)
+        self.stats["weighted_entropy_mean"] += self._normalized_entropy(norm_weights)
         return sum(v * w for v, w in zip(parent_vals, norm_weights))
 
     def _backup_aggregate(self, values: List[float]) -> float:
@@ -373,6 +380,7 @@ class MCTSSolver:
             n = float(self.stats["weighted_parent_terms"])
             self.stats["weighted_max_weight_mean"] = self.stats["weighted_max_weight_mean"] / n
             self.stats["weighted_parent_count_mean"] = self.stats["weighted_parent_count_mean"] / n
+            self.stats["weighted_entropy_mean"] = self.stats["weighted_entropy_mean"] / n
 
         if self.track_structure_quality:
             out_stats["structure_quality"] = self._structure_quality_metrics(root, proof)
@@ -384,4 +392,59 @@ class MCTSSolver:
             "proof": "; ".join(proof),
             "meta": {"triples": triples},
             "search_stats": out_stats,
+        }
+
+    def _finalize_runtime_stats(self, start_time: float) -> None:
+        elapsed = time.time() - start_time
+        self.stats["elapsed_time_s"] = elapsed
+        counters = self.llm.get_counters()
+        self.stats["llm_calls"] = counters.get("llm_calls", 0)
+        self.stats["llm_prompt_tokens"] = counters.get("llm_prompt_tokens", 0)
+        self.stats["llm_completion_tokens"] = counters.get("llm_completion_tokens", 0)
+
+    def _budget_reached(self, start_time: float) -> bool:
+        if self.budget_mode == "none" or self.budget_value <= 0:
+            return False
+        if self.budget_mode == "wall_clock":
+            return (time.time() - start_time) >= self.budget_value
+        if self.budget_mode == "llm_calls":
+            return self.llm.get_counters().get("llm_calls", 0) >= int(self.budget_value)
+        return False
+
+    def _structure_quality_metrics(self, root: MCTSNode, proof_steps: List[str]) -> Dict[str, float]:
+        num_nodes = max(1, len(self.node_table))
+        num_edges = 0
+        depth = {root: 0}
+        q = deque([root])
+        visited = set([root])
+        max_depth = 0
+        while q:
+            cur = q.popleft()
+            d = depth[cur]
+            max_depth = max(max_depth, d)
+            for _, ch in cur.children.items():
+                num_edges += 1
+                if ch not in visited:
+                    visited.add(ch)
+                    depth[ch] = d + 1
+                    q.append(ch)
+
+        merge_hits = float(self.stats.get("merge_hits", 0))
+        rejects = (
+            self.stats.get("reject_too_few_premises", 0)
+            + self.stats.get("reject_missing_premises", 0)
+            + self.stats.get("reject_empty_conclusion", 0)
+            + self.stats.get("reject_duplicate_conclusion", 0)
+            + self.stats.get("reject_bad_candidate", 0)
+        )
+        attempts = rejects + num_edges
+
+        return {
+            "num_nodes": float(num_nodes),
+            "num_edges": float(num_edges),
+            "avg_branching_factor": float(num_edges) / max(1.0, float(num_nodes)),
+            "max_graph_depth": float(max_depth),
+            "merge_reuse_ratio": merge_hits / max(1.0, merge_hits + num_nodes),
+            "redundancy_reject_ratio": float(rejects) / max(1.0, float(attempts)),
+            "proof_steps": float(len(proof_steps)),
         }

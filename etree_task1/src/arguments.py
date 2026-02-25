@@ -106,7 +106,7 @@ def get_args():
     parser.add_argument('--mcts_trace_topk', type=int, default=3)
 
     parser.add_argument('--mcts_weighted_return', type=str2bool, default=True)
-    parser.add_argument('--mcts_weight_mode', type=str, default='prior', choices=['prior', 'visit', 'hybrid'])
+    parser.add_argument('--mcts_weight_mode', type=str, default='prior', choices=['prior', 'visit', 'hybrid', 'inv_var'])
     parser.add_argument('--mcts_entropy_ucb', type=str2bool, default=True)
     parser.add_argument('--mcts_entropy_coef', type=float, default=1.0)
     parser.add_argument('--mcts_strict_dag_backprop', type=str2bool, default=True)
