@@ -83,6 +83,9 @@ python compare_baselines.py \
 3. **严格实验协议脚本**
    - 新增 `theorem_protocol.py`：联合 `compare_baselines.py` 的显著性结果与 `generate_theory_report.py` 的理论指标，
      输出 `all_pass` 协议检查（置换检验 p 值、bootstrap CI、收缩代理阈值等）。
+4. **ECE/温度校准理论版 UCB（新增）**
+   - 新增 `--mcts_calibration_mode {heuristic,ece_temp}`、`--mcts_ece_bins`、`--mcts_calibration_min_t`、`--mcts_calibration_max_t`。
+   - 在 `ece_temp` 模式下，以 ECE 代理驱动温度缩放并注入 UCB 探索项；输出 `ece_proxy_mean` 与 `temperature_scale_mean` 供论文分析。
 
 示例：
 ```bash

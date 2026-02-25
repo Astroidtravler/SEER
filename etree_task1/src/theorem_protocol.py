@@ -48,6 +48,11 @@ def main():
     dag_reuse = th.get('theory_unique_state_ratio', {}).get('mean', float('nan'))
     checks['dag_ratio_observable'] = _is_num(dag_reuse)
 
+    ece = th.get('ece_proxy_mean', {}).get('mean', float('nan'))
+    temp = th.get('temperature_scale_mean', {}).get('mean', float('nan'))
+    checks['ece_observable'] = _is_num(ece)
+    checks['temperature_observable'] = _is_num(temp)
+
     out = {
         'alpha': args.alpha,
         'max_contraction_ratio': args.max_contraction_ratio,
@@ -59,6 +64,8 @@ def main():
             'theory_contraction_ratio_mean': ctr,
             'bellman_residual_mean': resid,
             'theory_unique_state_ratio': dag_reuse,
+            'ece_proxy_mean': ece,
+            'temperature_scale_mean': temp,
         }
     }
 

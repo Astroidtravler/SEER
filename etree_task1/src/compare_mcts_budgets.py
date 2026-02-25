@@ -47,11 +47,15 @@ def load_theory_stats(output_dir: str):
             "bellman_residual_mean": float("nan"),
             "ucb_calibration_mean": float("nan"),
             "weighted_parent_var_proxy_mean": float("nan"),
+            "ece_proxy_mean": float("nan"),
+            "temperature_scale_mean": float("nan"),
         }
     vals = {
         "bellman_residual_mean": [],
         "ucb_calibration_mean": [],
         "weighted_parent_var_proxy_mean": [],
+        "ece_proxy_mean": [],
+        "temperature_scale_mean": [],
     }
     with open(pred_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -101,6 +105,7 @@ def main():
     for name, extra in variants:
         vals = []
         residual_vals, calib_vals, varproxy_vals = [], [], []
+        ece_vals, temp_vals = [], []
         for seed in seeds:
             cmd = f"{args.base_cmd} --seed {seed} --mcts_simulations {args.simulations} {extra}"
             run_cmd(cmd)
@@ -111,6 +116,8 @@ def main():
             residual_vals.append(th["bellman_residual_mean"])
             calib_vals.append(th["ucb_calibration_mean"])
             varproxy_vals.append(th["weighted_parent_var_proxy_mean"])
+            ece_vals.append(th["ece_proxy_mean"])
+            temp_vals.append(th["temperature_scale_mean"])
             per_run_rows.append(
                 {
                     "variant": name,
@@ -120,6 +127,8 @@ def main():
                     "bellman_residual_mean": th["bellman_residual_mean"],
                     "ucb_calibration_mean": th["ucb_calibration_mean"],
                     "weighted_parent_var_proxy_mean": th["weighted_parent_var_proxy_mean"],
+                    "ece_proxy_mean": th["ece_proxy_mean"],
+                    "temperature_scale_mean": th["temperature_scale_mean"],
                     "output_dir": latest,
                 }
             )
@@ -139,6 +148,8 @@ def main():
                 "bellman_residual_mean": mean(residual_vals) if residual_vals else float("nan"),
                 "ucb_calibration_mean": mean(calib_vals) if calib_vals else float("nan"),
                 "weighted_parent_var_proxy_mean": mean(varproxy_vals) if varproxy_vals else float("nan"),
+                "ece_proxy_mean": mean(ece_vals) if ece_vals else float("nan"),
+                "temperature_scale_mean": mean(temp_vals) if temp_vals else float("nan"),
             }
         )
 
@@ -153,6 +164,8 @@ def main():
                 "bellman_residual_mean",
                 "ucb_calibration_mean",
                 "weighted_parent_var_proxy_mean",
+                "ece_proxy_mean",
+                "temperature_scale_mean",
                 "output_dir",
             ],
         )

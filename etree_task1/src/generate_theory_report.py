@@ -38,6 +38,8 @@ def main():
         "theory_conservative_gap_mean": [],
         "theory_unique_state_ratio": [],
         "weighted_parent_var_proxy_mean": [],
+        "ece_proxy_mean": [],
+        "temperature_scale_mean": [],
     }
 
     with open(args.prediction_file, "r", encoding="utf-8") as f:
@@ -59,6 +61,8 @@ def main():
         "contraction_ratio_signal": report["theory_contraction_ratio_mean"]["mean"],
         "eta_gap_signal": report["theory_eta_contraction_gap_mean"]["mean"],
         "calibration_signal": report["ucb_calibration_mean"]["mean"],
+        "ece_signal": report["ece_proxy_mean"]["mean"],
+        "temperature_signal": report["temperature_scale_mean"]["mean"],
         "dag_reuse_signal": report["theory_unique_state_ratio"]["mean"],
     }
 

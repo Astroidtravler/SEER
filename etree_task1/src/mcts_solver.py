@@ -34,6 +34,10 @@ class MCTSSolver:
         self.theory_eta = min(1.0, max(0.0, float(getattr(args, "mcts_theory_eta", 0.5))))
         self.track_bellman_residual = bool(getattr(args, "mcts_track_bellman_residual", True))
         self.calibration_beta = max(0.0, float(getattr(args, "mcts_calibration_beta", 0.5)))
+        self.calibration_mode = getattr(args, "mcts_calibration_mode", "heuristic")
+        self.ece_bins = max(2, int(getattr(args, "mcts_ece_bins", 10)))
+        self.calib_min_t = max(1e-3, float(getattr(args, "mcts_calibration_min_t", 0.7)))
+        self.calib_max_t = max(self.calib_min_t, float(getattr(args, "mcts_calibration_max_t", 3.0)))
         self.budget_mode = getattr(args, "mcts_budget_mode", "none")
         self.budget_value = float(getattr(args, "mcts_budget_value", 0.0))
         self.track_structure_quality = bool(getattr(args, "mcts_track_structure_quality", True))
@@ -81,6 +85,11 @@ class MCTSSolver:
             "bellman_residual_count": 0,
             "ucb_calibration_mean": 0.0,
             "ucb_calibration_count": 0,
+            "calibration_mode": self.calibration_mode,
+            "ece_proxy_mean": 0.0,
+            "ece_proxy_count": 0,
+            "temperature_scale_mean": 0.0,
+            "temperature_scale_count": 0,
             "theory_eta_contraction_gap_mean": 0.0,
             "theory_eta_contraction_gap_count": 0,
             "theory_conservative_gap_mean": 0.0,
@@ -391,15 +400,60 @@ class MCTSSolver:
             return self._normalized_entropy(post_probs)
         return 0.5 * (self._normalized_entropy(prior_probs) + self._normalized_entropy(post_probs))
 
+    def _compute_ece_proxy(self, parent: MCTSNode) -> float:
+        children = list(parent.children.values())
+        if len(children) <= 1:
+            return 0.0
+        priors = [max(1e-12, ch.prior_p) for ch in children]
+        s = sum(priors)
+        priors = [p / max(1e-12, s) for p in priors]
+        post = [max(1e-12, float(ch.visits)) for ch in children]
+        ps = sum(post)
+        post = [p / max(1e-12, ps) for p in post]
+
+        # reliability-bin style ECE proxy using priors as confidence and posterior as empirical frequency.
+        bins = self.ece_bins
+        bucket = [[] for _ in range(bins)]
+        for conf, freq in zip(priors, post):
+            idx = min(bins - 1, int(conf * bins))
+            bucket[idx].append((conf, freq))
+
+        ece = 0.0
+        for b in bucket:
+            if not b:
+                continue
+            avg_conf = sum(x for x, _ in b) / len(b)
+            avg_freq = sum(y for _, y in b) / len(b)
+            mass = len(b) / float(len(children))
+            ece += abs(avg_conf - avg_freq) * mass
+        return max(0.0, min(1.0, ece))
+
+    def _calibrated_entropy_scale(self, parent: MCTSNode, entropy: float) -> float:
+        if self.calibration_mode == "ece_temp":
+            ece = self._compute_ece_proxy(parent)
+            # higher ECE -> larger temperature and more exploration.
+            temp = min(self.calib_max_t, max(self.calib_min_t, 1.0 + self.calibration_beta * ece))
+            scale = 1.0 + self.entropy_coef * entropy * temp
+            self.stats["ece_proxy_mean"] += ece
+            self.stats["ece_proxy_count"] += 1
+            self.stats["temperature_scale_mean"] += temp
+            self.stats["temperature_scale_count"] += 1
+            self.stats["ucb_calibration_mean"] += scale
+            self.stats["ucb_calibration_count"] += 1
+            return scale
+
+        calib = 1.0 + self.calibration_beta * abs(entropy - 0.5)
+        scale = 1.0 + self.entropy_coef * entropy * calib
+        self.stats["ucb_calibration_mean"] += scale
+        self.stats["ucb_calibration_count"] += 1
+        return scale
+
     def _ucb_score(self, parent, child):
         q_value = child.q_value
         entropy_scale = 1.0
         if self.enable_entropy_ucb:
             ent = self._parent_entropy(parent)
-            calib = 1.0 + self.calibration_beta * abs(ent - 0.5)
-            self.stats["ucb_calibration_mean"] += calib
-            self.stats["ucb_calibration_count"] += 1
-            entropy_scale += self.entropy_coef * ent * calib
+            entropy_scale = self._calibrated_entropy_scale(parent, ent)
         exploration = (
             self.c_puct
             * entropy_scale
@@ -455,6 +509,14 @@ class MCTSSolver:
         if self.stats["ucb_calibration_count"] > 0:
             self.stats["ucb_calibration_mean"] = (
                 self.stats["ucb_calibration_mean"] / float(self.stats["ucb_calibration_count"])
+            )
+        if self.stats["ece_proxy_count"] > 0:
+            self.stats["ece_proxy_mean"] = (
+                self.stats["ece_proxy_mean"] / float(self.stats["ece_proxy_count"])
+            )
+        if self.stats["temperature_scale_count"] > 0:
+            self.stats["temperature_scale_mean"] = (
+                self.stats["temperature_scale_mean"] / float(self.stats["temperature_scale_count"])
             )
         if self.stats["theory_eta_contraction_gap_count"] > 0:
             self.stats["theory_eta_contraction_gap_mean"] = (
