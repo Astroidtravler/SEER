@@ -31,6 +31,9 @@ class MCTSSolver:
         self.entropy_source = getattr(args, "mcts_entropy_source", "hybrid")
         self.backup_operator = getattr(args, "mcts_backup_operator", "mean")
         self.backup_tau = max(1e-6, float(getattr(args, "mcts_backup_tau", 1.0)))
+        self.theory_eta = min(1.0, max(0.0, float(getattr(args, "mcts_theory_eta", 0.5))))
+        self.track_bellman_residual = bool(getattr(args, "mcts_track_bellman_residual", True))
+        self.calibration_beta = max(0.0, float(getattr(args, "mcts_calibration_beta", 0.5)))
         self.budget_mode = getattr(args, "mcts_budget_mode", "none")
         self.budget_value = float(getattr(args, "mcts_budget_value", 0.0))
         self.track_structure_quality = bool(getattr(args, "mcts_track_structure_quality", True))
@@ -60,6 +63,7 @@ class MCTSSolver:
             "objective_mode": self.objective_mode,
             "entropy_source": self.entropy_source,
             "backup_operator": self.backup_operator,
+            "theory_eta": self.theory_eta,
             "budget_mode": self.budget_mode,
             "budget_value": self.budget_value,
             "elapsed_time_s": 0.0,
@@ -71,6 +75,11 @@ class MCTSSolver:
             "weighted_parent_count_mean": 0.0,
             "weighted_entropy_mean": 0.0,
             "weighted_parent_var_proxy_mean": 0.0,
+            "bellman_residual_mean": 0.0,
+            "bellman_residual_max": 0.0,
+            "bellman_residual_count": 0,
+            "ucb_calibration_mean": 0.0,
+            "ucb_calibration_count": 0,
         }
 
     def search(self, initial_data_item):
@@ -279,6 +288,13 @@ class MCTSSolver:
             return sum(w * v for w, v in zip(weights, values))
         return sum(values) / len(values)
 
+    def _theory_operator(self, node: MCTSNode, running: float, parent_agg: float, conservative_parent: float) -> float:
+        # T_eta(s) = r + gamma * ((1-eta) * running + eta * parent_agg)
+        # conservative term is reserved for robustness control via objective_mode.
+        del conservative_parent
+        mixed = (1.0 - self.theory_eta) * running + self.theory_eta * parent_agg
+        return node.r_t + self.gamma * mixed
+
     def _compute_backup_target(self, node: MCTSNode, running: float) -> float:
         parent_agg = self._aggregate_parent_value(node)
         conservative_parent = min([p.V_t for p in node.parents], default=parent_agg)
@@ -286,6 +302,8 @@ class MCTSSolver:
             return node.r_t + self.gamma * parent_agg
         if self.objective_mode == "conservative":
             return node.r_t + self.gamma * conservative_parent
+        if self.objective_mode == "parametric":
+            return self._theory_operator(node, running, parent_agg, conservative_parent)
         # graph_td
         return node.r_t + self.gamma * self._backup_aggregate([running, parent_agg])
 
@@ -293,6 +311,11 @@ class MCTSSolver:
         running = rollout_reward
         for node in reversed(path):
             target = self._compute_backup_target(node, running)
+            if self.track_bellman_residual:
+                residual = abs(target - node.V_t)
+                self.stats["bellman_residual_mean"] += residual
+                self.stats["bellman_residual_max"] = max(self.stats["bellman_residual_max"], residual)
+                self.stats["bellman_residual_count"] += 1
             node.accumulate(target, inc_visit=True)
             running = target
 
@@ -309,6 +332,11 @@ class MCTSSolver:
             seen.add(h)
 
             graph_target = self._compute_backup_target(node, node.V_t)
+            if self.track_bellman_residual:
+                residual = abs(graph_target - node.V_t)
+                self.stats["bellman_residual_mean"] += residual
+                self.stats["bellman_residual_max"] = max(self.stats["bellman_residual_max"], residual)
+                self.stats["bellman_residual_count"] += 1
             if self.dag_update_mode == "visit_and_value":
                 node.accumulate(graph_target, inc_visit=True)
             else:
@@ -340,7 +368,11 @@ class MCTSSolver:
         q_value = child.q_value
         entropy_scale = 1.0
         if self.enable_entropy_ucb:
-            entropy_scale += self.entropy_coef * self._parent_entropy(parent)
+            ent = self._parent_entropy(parent)
+            calib = 1.0 + self.calibration_beta * abs(ent - 0.5)
+            self.stats["ucb_calibration_mean"] += calib
+            self.stats["ucb_calibration_count"] += 1
+            entropy_scale += self.entropy_coef * ent * calib
         exploration = (
             self.c_puct
             * entropy_scale
@@ -388,6 +420,15 @@ class MCTSSolver:
             self.stats["weighted_parent_count_mean"] = self.stats["weighted_parent_count_mean"] / n
             self.stats["weighted_entropy_mean"] = self.stats["weighted_entropy_mean"] / n
             self.stats["weighted_parent_var_proxy_mean"] = self.stats["weighted_parent_var_proxy_mean"] / n
+
+        if self.stats["bellman_residual_count"] > 0:
+            self.stats["bellman_residual_mean"] = (
+                self.stats["bellman_residual_mean"] / float(self.stats["bellman_residual_count"])
+            )
+        if self.stats["ucb_calibration_count"] > 0:
+            self.stats["ucb_calibration_mean"] = (
+                self.stats["ucb_calibration_mean"] / float(self.stats["ucb_calibration_count"])
+            )
 
         if self.track_structure_quality:
             out_stats["structure_quality"] = self._structure_quality_metrics(root, proof)

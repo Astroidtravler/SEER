@@ -62,6 +62,17 @@ python compare_baselines.py \
 3. **加权结构回报可审计证据**
    - 在加权父聚合时输出统计证据：`weighted_parent_terms`、`weighted_max_weight_mean`、`weighted_parent_count_mean`，用于理论分析与附录审计。
 
+## 论文证明版（新增）
+1. **参数化 Bellman 算子 `T_eta`（工程实现）**
+   - 新增 `--mcts_objective_mode parametric` 与 `--mcts_theory_eta`，在 `mcts_solver.py` 中实现
+     `T_eta(s)=r(s)+gamma*((1-eta) * running + eta * parent_agg)`。
+2. **近似压缩映射的经验证据**
+   - 新增 Bellman 残差统计：`bellman_residual_mean`、`bellman_residual_max`、`bellman_residual_count`。
+3. **校准熵 UCB 的理论代理证据**
+   - 新增 `--mcts_calibration_beta` 与 `ucb_calibration_mean`，记录熵校准放缩均值。
+4. **论文表格直出统计**
+   - `compare_mcts_budgets.py` 新增理论列导出：`bellman_residual_mean`、`ucb_calibration_mean`、`weighted_parent_var_proxy_mean`。
+
 ## FAQ：改进“可证明加权结构回报”是否要改原代码？
 结论：**要改，但改动范围可控，不需要推翻 PPO 主线**。
 
