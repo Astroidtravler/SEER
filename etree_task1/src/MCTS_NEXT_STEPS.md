@@ -61,3 +61,18 @@ python compare_baselines.py \
    - 在 `search_stats.structure_quality` 新增图结构指标：`num_nodes`、`num_edges`、`avg_branching_factor`、`max_graph_depth`、`merge_reuse_ratio`、`redundancy_reject_ratio`、`proof_steps`。
 3. **加权结构回报可审计证据**
    - 在加权父聚合时输出统计证据：`weighted_parent_terms`、`weighted_max_weight_mean`、`weighted_parent_count_mean`，用于理论分析与附录审计。
+
+## FAQ：改进“可证明加权结构回报”是否要改原代码？
+结论：**要改，但改动范围可控，不需要推翻 PPO 主线**。
+
+建议最小改动点：
+1. `mcts_solver.py`
+   - 增加“证明友好”的统计量输出（如权重分布分位数、父节点估计方差代理）。
+   - 增加 `weight_mode` 的一致化归一逻辑，保证实验可比。
+2. `arguments.py`
+   - 增加理论实验开关（如方差代理类型、保守温度等），避免硬编码。
+3. `compare_mcts_budgets.py` / `compare_baselines.py`
+   - 导出与命题对应的统计列（方差、CI、paired 统计），用于论文表格直接引用。
+
+不建议改动：
+- 旧 PPO 训练主链（`RL_solver.py` 等）可保持不变，避免影响基线复现。
