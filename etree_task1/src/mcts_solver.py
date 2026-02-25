@@ -86,6 +86,9 @@ class MCTSSolver:
             "theory_conservative_gap_mean": 0.0,
             "theory_conservative_gap_count": 0,
             "theory_unique_state_ratio": 0.0,
+            "theory_contraction_ratio_mean": 0.0,
+            "theory_contraction_ratio_count": 0,
+            "theory_contraction_bound": self.gamma,
         }
 
     def search(self, initial_data_item):
@@ -325,6 +328,11 @@ class MCTSSolver:
             target = self._compute_backup_target(node, running)
             if self.track_bellman_residual:
                 residual = abs(target - node.V_t)
+                prev = node.last_bellman_residual
+                if prev is not None and prev > 1e-12:
+                    ratio = residual / prev
+                    self.stats["theory_contraction_ratio_mean"] += ratio
+                    self.stats["theory_contraction_ratio_count"] += 1
                 node.last_bellman_residual = residual
                 self.stats["bellman_residual_mean"] += residual
                 self.stats["bellman_residual_max"] = max(self.stats["bellman_residual_max"], residual)
@@ -347,6 +355,11 @@ class MCTSSolver:
             graph_target = self._compute_backup_target(node, node.V_t)
             if self.track_bellman_residual:
                 residual = abs(graph_target - node.V_t)
+                prev = node.last_bellman_residual
+                if prev is not None and prev > 1e-12:
+                    ratio = residual / prev
+                    self.stats["theory_contraction_ratio_mean"] += ratio
+                    self.stats["theory_contraction_ratio_count"] += 1
                 node.last_bellman_residual = residual
                 self.stats["bellman_residual_mean"] += residual
                 self.stats["bellman_residual_max"] = max(self.stats["bellman_residual_max"], residual)
@@ -456,6 +469,11 @@ class MCTSSolver:
         self.stats["theory_unique_state_ratio"] = float(len(self.node_table)) / max(
             1.0, float(self.max_simulations)
         )
+        if self.stats["theory_contraction_ratio_count"] > 0:
+            self.stats["theory_contraction_ratio_mean"] = (
+                self.stats["theory_contraction_ratio_mean"]
+                / float(self.stats["theory_contraction_ratio_count"])
+            )
 
         if self.track_structure_quality:
             out_stats["structure_quality"] = self._structure_quality_metrics(root, proof)

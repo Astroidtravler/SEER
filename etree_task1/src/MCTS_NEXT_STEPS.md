@@ -80,12 +80,20 @@ python compare_baselines.py \
    - 新增 `theory_unique_state_ratio`：用于观测 DAG 状态复用强度（unique states / simulations）。
 2. **证明报告脚本**
    - 新增 `generate_theory_report.py`，从 `mcts_prediction_<split>.jsonl` 聚合上述理论指标并输出 JSON 报告。
+3. **严格实验协议脚本**
+   - 新增 `theorem_protocol.py`：联合 `compare_baselines.py` 的显著性结果与 `generate_theory_report.py` 的理论指标，
+     输出 `all_pass` 协议检查（置换检验 p 值、bootstrap CI、收缩代理阈值等）。
 
 示例：
 ```bash
 python generate_theory_report.py \
   --prediction_file ../../output_dir/etree_task1/test/.../epoch_tree/dev/mcts_prediction_dev.jsonl \
   --save_json theory_report_dev.json
+
+python theorem_protocol.py \
+  --baseline_summary baseline_compare_summary.json \
+  --theory_report theory_report_dev.json \
+  --save_json theorem_protocol_check.json
 ```
 
 ## FAQ：改进“可证明加权结构回报”是否要改原代码？

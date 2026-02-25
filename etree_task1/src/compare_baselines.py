@@ -9,6 +9,7 @@ import os
 import subprocess
 from statistics import mean, pstdev
 import math
+import random
 
 
 def normal_approx_ci(values, alpha=0.05):
@@ -31,6 +32,38 @@ def paired_t_like_stat(a, b):
     if sd == 0:
         return float("inf") if mu > 0 else float("-inf")
     return mu / (sd / math.sqrt(len(diffs)))
+
+
+def paired_bootstrap_ci(a, b, alpha=0.05, iters=2000, seed=42):
+    if len(a) != len(b) or len(a) == 0:
+        return (float("nan"), float("nan"))
+    rng = random.Random(seed)
+    diffs = [x - y for x, y in zip(a, b)]
+    n = len(diffs)
+    samples = []
+    for _ in range(iters):
+        draw = [diffs[rng.randrange(n)] for _ in range(n)]
+        samples.append(sum(draw) / n)
+    samples.sort()
+    lo = int((alpha / 2.0) * (iters - 1))
+    hi = int((1.0 - alpha / 2.0) * (iters - 1))
+    return (samples[lo], samples[hi])
+
+
+def paired_permutation_pvalue(a, b, iters=5000, seed=42):
+    if len(a) != len(b) or len(a) == 0:
+        return float("nan")
+    rng = random.Random(seed)
+    diffs = [x - y for x, y in zip(a, b)]
+    obs = abs(sum(diffs) / len(diffs))
+    cnt = 0
+    for _ in range(iters):
+        s = 0.0
+        for d in diffs:
+            s += d if rng.random() < 0.5 else -d
+        if abs(s / len(diffs)) >= obs:
+            cnt += 1
+    return (cnt + 1) / (iters + 1)
 
 
 def run_cmd(cmd: str):
@@ -63,6 +96,9 @@ def main():
     parser.add_argument("--out_root", type=str, default="../../output_dir/etree_task1/test")
     parser.add_argument("--save_json", type=str, default="baseline_compare_summary.json")
     parser.add_argument("--alpha", type=float, default=0.05)
+    parser.add_argument("--bootstrap_iters", type=int, default=2000)
+    parser.add_argument("--perm_iters", type=int, default=5000)
+    parser.add_argument("--stat_seed", type=int, default=42)
     args = parser.parse_args()
 
     seeds = [int(x) for x in args.seeds.split(",") if x.strip()]
@@ -88,6 +124,12 @@ def main():
         "mcts": {"mean": mean(result["mcts"]), "std": pstdev(result["mcts"]) if len(seeds) > 1 else 0.0, "ci_low": mcts_ci[0], "ci_high": mcts_ci[1], "vals": result["mcts"]},
         "delta_mean": mean(result["mcts"]) - mean(result["ppo"]),
         "paired_t_stat": paired_t_like_stat(result["mcts"], result["ppo"]),
+        "delta_bootstrap_ci": paired_bootstrap_ci(
+            result["mcts"], result["ppo"], alpha=args.alpha, iters=args.bootstrap_iters, seed=args.stat_seed
+        ),
+        "paired_permutation_pvalue": paired_permutation_pvalue(
+            result["mcts"], result["ppo"], iters=args.perm_iters, seed=args.stat_seed
+        ),
     }
 
     with open(args.save_json, "w") as f:

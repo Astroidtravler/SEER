@@ -32,6 +32,7 @@ def main():
     metrics = {
         "bellman_residual_mean": [],
         "bellman_residual_max": [],
+        "theory_contraction_ratio_mean": [],
         "ucb_calibration_mean": [],
         "theory_eta_contraction_gap_mean": [],
         "theory_conservative_gap_mean": [],
@@ -55,6 +56,7 @@ def main():
     # Simple theorem-facing checklist
     report["checks"] = {
         "residual_bounded_signal": report["bellman_residual_mean"]["mean"],
+        "contraction_ratio_signal": report["theory_contraction_ratio_mean"]["mean"],
         "eta_gap_signal": report["theory_eta_contraction_gap_mean"]["mean"],
         "calibration_signal": report["ucb_calibration_mean"]["mean"],
         "dag_reuse_signal": report["theory_unique_state_ratio"]["mean"],
