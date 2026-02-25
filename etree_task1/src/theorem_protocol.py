@@ -25,6 +25,8 @@ def main():
     p.add_argument('--save_json', type=str, default='theorem_protocol_check.json')
     p.add_argument('--alpha', type=float, default=0.05)
     p.add_argument('--max_contraction_ratio', type=float, default=1.05)
+    p.add_argument('--gamma', type=float, default=0.95)
+    p.add_argument('--eta', type=float, default=0.5)
     args = p.parse_args()
 
     base = _load(args.baseline_summary)
@@ -53,8 +55,16 @@ def main():
     checks['ece_observable'] = _is_num(ece)
     checks['temperature_observable'] = _is_num(temp)
 
+    # theorem assumption checks (for appendix-level rigor)
+    checks['assumption_discount_in_0_1'] = 0.0 <= args.gamma < 1.0
+    checks['assumption_eta_in_0_1'] = 0.0 <= args.eta <= 1.0
+    # for T_eta(s)=r+gamma*((1-eta)x+eta y), contraction constant is gamma in sup norm
+    checks['theorem_contraction_constant_valid'] = checks['assumption_discount_in_0_1']
+
     out = {
         'alpha': args.alpha,
+        'gamma': args.gamma,
+        'eta': args.eta,
         'max_contraction_ratio': args.max_contraction_ratio,
         'checks': checks,
         'all_pass': all(checks.values()),

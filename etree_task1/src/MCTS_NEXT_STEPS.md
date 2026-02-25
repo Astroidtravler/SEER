@@ -86,6 +86,8 @@ python compare_baselines.py \
 4. **ECE/温度校准理论版 UCB（新增）**
    - 新增 `--mcts_calibration_mode {heuristic,ece_temp}`、`--mcts_ece_bins`、`--mcts_calibration_min_t`、`--mcts_calibration_max_t`。
    - 在 `ece_temp` 模式下，以 ECE 代理驱动温度缩放并注入 UCB 探索项；输出 `ece_proxy_mean` 与 `temperature_scale_mean` 供论文分析。
+5. **形式化命题与证明文本（新增）**
+   - 新增 `THEOREM_PROOFS.md`，包含参数化算子压缩性、保守聚合风险界、DAG 合并等价性命题与证明草图，并给出与代码指标的一一对应。
 
 示例：
 ```bash
