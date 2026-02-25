@@ -40,6 +40,8 @@ def main():
         "weighted_parent_var_proxy_mean": [],
         "ece_proxy_mean": [],
         "temperature_scale_mean": [],
+        "dag_equivalence_violation_count": [],
+        "dag_equivalence_check_count": [],
     }
 
     with open(args.prediction_file, "r", encoding="utf-8") as f:
@@ -64,6 +66,7 @@ def main():
         "ece_signal": report["ece_proxy_mean"]["mean"],
         "temperature_signal": report["temperature_scale_mean"]["mean"],
         "dag_reuse_signal": report["theory_unique_state_ratio"]["mean"],
+        "dag_equivalence_violation": report["dag_equivalence_violation_count"]["mean"],
     }
 
     with open(args.save_json, "w", encoding="utf-8") as f:

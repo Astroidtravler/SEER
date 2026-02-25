@@ -88,6 +88,9 @@ python compare_baselines.py \
    - 在 `ece_temp` 模式下，以 ECE 代理驱动温度缩放并注入 UCB 探索项；输出 `ece_proxy_mean` 与 `temperature_scale_mean` 供论文分析。
 5. **形式化命题与证明文本（新增）**
    - 新增 `THEOREM_PROOFS.md`，包含参数化算子压缩性、保守聚合风险界、DAG 合并等价性命题与证明草图，并给出与代码指标的一一对应。
+6. **Graph-MDP DAG 等价不变性检查（新增）**
+   - 在 transposition merge 时新增 runtime invariant 检查：`dag_equivalence_violation_count`。
+   - 理论报告与协议脚本加入 `dag_equivalence_violation_count`，要求其为 0。
 
 示例：
 ```bash

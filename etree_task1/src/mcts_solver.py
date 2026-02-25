@@ -98,6 +98,8 @@ class MCTSSolver:
             "theory_contraction_ratio_mean": 0.0,
             "theory_contraction_ratio_count": 0,
             "theory_contraction_bound": self.gamma,
+            "dag_equivalence_violation_count": 0,
+            "dag_equivalence_check_count": 0,
         }
 
     def search(self, initial_data_item):
@@ -239,6 +241,7 @@ class MCTSSolver:
 
             if child_hash in self.node_table:
                 merged = self.node_table[child_hash]
+                self._check_dag_equivalence(child, merged)
                 merged.add_parent(node, edge_prior=child.prior_p)
                 node.children[action_str] = merged
                 self.stats["merge_hits"] += 1
@@ -250,6 +253,15 @@ class MCTSSolver:
             new_children.append(child)
 
         return new_children
+
+    def _check_dag_equivalence(self, candidate: MCTSNode, merged: MCTSNode) -> None:
+        """Runtime invariant check for Graph-MDP state equivalence under transposition merge.
+
+        If two nodes share hash, their canonical states should match exactly.
+        """
+        self.stats["dag_equivalence_check_count"] += 1
+        if candidate.canonical_state() != merged.canonical_state():
+            self.stats["dag_equivalence_violation_count"] += 1
 
     def _aggregate_parent_value(self, node: MCTSNode) -> float:
         if not node.parents:

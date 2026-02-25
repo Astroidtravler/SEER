@@ -55,10 +55,30 @@
 
 ## 命题 3：DAG 等价状态合并不改变最优值（在 A4 下）
 
-若两条轨迹映射到同一 canonical state hash，且更新在该 hash 下共享同一状态统计，则 Tree 与 DAG 的 Bellman 固定点一致。
+### 等价关系定义
+定义状态等价关系 \(\sim\)：
+\[
+s_1 \sim s_2 \iff \text{canonical\_state}(s_1)=\text{canonical\_state}(s_2),
+\]
+其中 `canonical_state` 由 `(hypothesis, facts, used)` 的规范化有序表示组成。
 
-### 证明思路
-合并仅改变访问拓扑，不改变状态转移核与奖励定义；Bellman 方程在状态空间上保持不变，故固定点不变。
+### 命题
+若两条轨迹映射到同一 canonical state hash，且更新在该 hash 下共享同一状态统计，则 Tree 与 DAG 的 Bellman 固定点一致，故最优值与最优策略不变。
+
+### 证明
+设原树 MDP 状态空间为 \(\mathcal S\)，按 \(\sim\) 构造商空间 \(\bar{\mathcal S}=\mathcal S/\sim\)。
+
+1. **奖励保持**：若 \(s_1\sim s_2\)，canonical 表示一致，故可行动作集合与一步语义状态一致，奖励定义相同。
+2. **转移保持**：对任意动作 \(a\)，\(s_1,s_2\) 在 canonical 规则下转移到同一等价类 \([s']\)。
+3. **Bellman 方程同构**：原空间 Bellman 算子在等价类上映射为商空间 Bellman 算子，且值函数满足
+   \(V(s)=\bar V([s])\)。
+
+因此树搜索到图搜索（transposition merge）仅是状态空间商化，不改变 Bellman 固定点；故最优值与最优策略保持不变。
+
+### 代码一致性检查
+- `mcts_node.py::canonical_state()` 给出等价关系定义。
+- `mcts_solver.py::_check_dag_equivalence()` 在每次合并时检查 invariant。
+- 指标 `dag_equivalence_violation_count` 应为 0。
 
 ## 与实验协议的对应
 

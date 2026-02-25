@@ -50,6 +50,9 @@ def main():
     dag_reuse = th.get('theory_unique_state_ratio', {}).get('mean', float('nan'))
     checks['dag_ratio_observable'] = _is_num(dag_reuse)
 
+    dag_eq_violation = th.get('dag_equivalence_violation_count', {}).get('mean', float('nan'))
+    checks['dag_equivalence_invariant_pass'] = _is_num(dag_eq_violation) and dag_eq_violation <= 0.0
+
     ece = th.get('ece_proxy_mean', {}).get('mean', float('nan'))
     temp = th.get('temperature_scale_mean', {}).get('mean', float('nan'))
     checks['ece_observable'] = _is_num(ece)
@@ -74,6 +77,7 @@ def main():
             'theory_contraction_ratio_mean': ctr,
             'bellman_residual_mean': resid,
             'theory_unique_state_ratio': dag_reuse,
+            'dag_equivalence_violation_count': dag_eq_violation,
             'ece_proxy_mean': ece,
             'temperature_scale_mean': temp,
         }

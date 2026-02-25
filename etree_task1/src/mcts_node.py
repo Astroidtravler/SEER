@@ -141,14 +141,21 @@ class MCTSNode:
         return "\n".join(available_facts)
 
     def state_hash(self) -> str:
-        canonical = {
+        canonical = self.canonical_state()
+        payload = json.dumps(canonical, ensure_ascii=False, sort_keys=True)
+        self.node_hash = hashlib.sha1(payload.encode("utf-8")).hexdigest()
+        return self.node_hash
+
+    def canonical_state(self) -> Dict:
+        """Canonical state representation for Graph-MDP equivalence relation.
+
+        Two states are equivalent iff their canonical_state() are identical.
+        """
+        return {
             "hypothesis": self.H,
             "facts": sorted(self.id2sent.items(), key=lambda x: x[0]),
             "used": sorted(self.used_premises.items(), key=lambda x: x[1]),
         }
-        payload = json.dumps(canonical, ensure_ascii=False, sort_keys=True)
-        self.node_hash = hashlib.sha1(payload.encode("utf-8")).hexdigest()
-        return self.node_hash
 
     def is_terminal(self) -> bool:
         action_done = self.action_taken is not None and Action.end in str(self.action_taken).lower()
