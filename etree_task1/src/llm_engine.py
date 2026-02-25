@@ -30,6 +30,9 @@ class LLMEngine:
 
     def get_counters(self) -> Dict[str, int]:
         return {
+            "llm_calls": int(self.request_count),
+            "llm_prompt_tokens": int(self.prompt_tokens),
+            "llm_completion_tokens": int(self.completion_tokens),
             "request_count": int(self.request_count),
             "prompt_tokens": int(self.prompt_tokens),
             "completion_tokens": int(self.completion_tokens),

@@ -70,6 +70,7 @@ class MCTSSolver:
             "weighted_max_weight_mean": 0.0,
             "weighted_parent_count_mean": 0.0,
             "weighted_entropy_mean": 0.0,
+            "weighted_parent_var_proxy_mean": 0.0,
         }
 
     def search(self, initial_data_item):
@@ -229,10 +230,14 @@ class MCTSSolver:
 
         parent_vals = []
         weights = []
+        var_proxy_terms = []
         for parent in node.parents:
             parent_vals.append(parent.V_t)
             ph = parent.node_hash or parent.state_hash()
             prior = node.incoming_prior.get(ph, 1e-6)
+            # variance proxy used for theory-oriented analysis: uncertainty decreases with visits
+            var_proxy = 1.0 / max(1.0, float(parent.visits))
+            var_proxy_terms.append(var_proxy)
             if self.weight_mode == "visit":
                 w = max(1e-6, float(parent.visits))
             elif self.weight_mode == "hybrid":
@@ -240,8 +245,7 @@ class MCTSSolver:
             elif self.weight_mode == "inv_var":
                 # inverse-variance proxy: reliable parents should get larger weights.
                 # We use visit-scaled uncertainty as a practical estimator.
-                uncertainty = 1.0 / max(1.0, float(parent.visits))
-                w = max(1e-6, 1.0 / max(uncertainty, 1e-6))
+                w = max(1e-6, 1.0 / max(var_proxy, 1e-6))
             else:
                 w = max(1e-6, prior)
             weights.append(w)
@@ -255,6 +259,8 @@ class MCTSSolver:
         self.stats["weighted_max_weight_mean"] += max(norm_weights)
         self.stats["weighted_parent_count_mean"] += len(parent_vals)
         self.stats["weighted_entropy_mean"] += self._normalized_entropy(norm_weights)
+        if var_proxy_terms:
+            self.stats["weighted_parent_var_proxy_mean"] += sum(var_proxy_terms) / len(var_proxy_terms)
         return sum(v * w for v, w in zip(parent_vals, norm_weights))
 
     def _backup_aggregate(self, values: List[float]) -> float:
@@ -381,6 +387,7 @@ class MCTSSolver:
             self.stats["weighted_max_weight_mean"] = self.stats["weighted_max_weight_mean"] / n
             self.stats["weighted_parent_count_mean"] = self.stats["weighted_parent_count_mean"] / n
             self.stats["weighted_entropy_mean"] = self.stats["weighted_entropy_mean"] / n
+            self.stats["weighted_parent_var_proxy_mean"] = self.stats["weighted_parent_var_proxy_mean"] / n
 
         if self.track_structure_quality:
             out_stats["structure_quality"] = self._structure_quality_metrics(root, proof)
