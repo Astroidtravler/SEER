@@ -91,6 +91,9 @@ python compare_baselines.py \
 6. **Graph-MDP DAG 等价不变性检查（新增）**
    - 在 transposition merge 时新增 runtime invariant 检查：`dag_equivalence_violation_count`。
    - 理论报告与协议脚本加入 `dag_equivalence_violation_count`，要求其为 0。
+7. **1/2/3 点严格证明与实现覆盖检查（新增）**
+   - 新增 `THEOREM_PROOFS_123.md`：只覆盖第 1/2/3 点严格命题与证明（不覆盖第 4 点）。
+   - 新增 `check_theorem_coverage.py`：自动检查第 1/2/3 点在代码中是否已有对应实现钩子。
 
 示例：
 ```bash
