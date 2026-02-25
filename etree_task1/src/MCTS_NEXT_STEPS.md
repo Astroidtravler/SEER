@@ -49,3 +49,15 @@ python compare_baselines.py \
    - 新增 `--mcts_backup_operator {mean,max,softmax}` 与 `--mcts_backup_tau`，用于控制Graph-TD中的聚合算子。
 4. **统计显著性基础设施**
    - `compare_mcts_budgets.py`、`compare_baselines.py` 新增 `--alpha` 与正态近似置信区间输出；baseline对比新增 paired t-like 统计量。
+
+
+- [x] Step 8: 补齐未完成三点（预算协议/结构质量指标/加权结构回报可审计证据）
+
+## Step 8 实装
+1. **预算受限最优性协议（工程实现）**
+   - 新增 `--mcts_budget_mode {none,llm_calls,wall_clock}` 与 `--mcts_budget_value`。
+   - 搜索循环支持预算触发提前停止，并在 `search_stats` 输出 `budget_stop_simulation`、`elapsed_time_s`、`llm_calls`、token 统计。
+2. **结构质量指标扩展**
+   - 在 `search_stats.structure_quality` 新增图结构指标：`num_nodes`、`num_edges`、`avg_branching_factor`、`max_graph_depth`、`merge_reuse_ratio`、`redundancy_reject_ratio`、`proof_steps`。
+3. **加权结构回报可审计证据**
+   - 在加权父聚合时输出统计证据：`weighted_parent_terms`、`weighted_max_weight_mean`、`weighted_parent_count_mean`，用于理论分析与附录审计。

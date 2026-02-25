@@ -18,6 +18,22 @@ class LLMEngine:
         self.timeout_s = getattr(args, "llm_timeout", 30)
         self.max_retry = getattr(args, "llm_max_retry", 2)
         self.headers = {"Content-Type": "application/json"}
+        self.request_count = 0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+
+
+    def reset_counters(self) -> None:
+        self.request_count = 0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+
+    def get_counters(self) -> Dict[str, int]:
+        return {
+            "request_count": int(self.request_count),
+            "prompt_tokens": int(self.prompt_tokens),
+            "completion_tokens": int(self.completion_tokens),
+        }
 
     def _post_json(self, payload: Dict[str, Any], timeout: int) -> Dict[str, Any]:
         last_err = None
@@ -25,7 +41,12 @@ class LLMEngine:
             try:
                 r = requests.post(self.api_url, headers=self.headers, json=payload, timeout=timeout)
                 r.raise_for_status()
-                return r.json()
+                data = r.json()
+                self.request_count += 1
+                usage = data.get("usage", {}) if isinstance(data, dict) else {}
+                self.prompt_tokens += int(usage.get("prompt_tokens", 0) or 0)
+                self.completion_tokens += int(usage.get("completion_tokens", 0) or 0)
+                return data
             except Exception as e:
                 last_err = e
                 if i < self.max_retry:

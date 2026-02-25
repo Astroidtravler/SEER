@@ -119,6 +119,9 @@ def get_args():
     parser.add_argument('--mcts_backup_operator', type=str, default='mean', choices=['mean', 'max', 'softmax'])
     parser.add_argument('--mcts_backup_tau', type=float, default=1.0)
     parser.add_argument('--mcts_ci_alpha', type=float, default=0.05)
+    parser.add_argument('--mcts_budget_mode', type=str, default='none', choices=['none', 'llm_calls', 'wall_clock'])
+    parser.add_argument('--mcts_budget_value', type=float, default=0.0)
+    parser.add_argument('--mcts_track_structure_quality', type=str2bool, default=True)
 
     args = parser.parse_args()  # 解析参数
 

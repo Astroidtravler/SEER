@@ -1,6 +1,7 @@
 import logging
 import math
 import random
+import time
 from collections import deque
 from typing import Dict, List
 
@@ -30,6 +31,9 @@ class MCTSSolver:
         self.entropy_source = getattr(args, "mcts_entropy_source", "hybrid")
         self.backup_operator = getattr(args, "mcts_backup_operator", "mean")
         self.backup_tau = max(1e-6, float(getattr(args, "mcts_backup_tau", 1.0)))
+        self.budget_mode = getattr(args, "mcts_budget_mode", "none")
+        self.budget_value = float(getattr(args, "mcts_budget_value", 0.0))
+        self.track_structure_quality = bool(getattr(args, "mcts_track_structure_quality", True))
 
         self.rollout_policy = getattr(args, "mcts_rollout_policy", "max_ucb")
         self.reward_backend = getattr(args, "mcts_reward_backend", "llm_judge_discrete")
@@ -56,11 +60,22 @@ class MCTSSolver:
             "objective_mode": self.objective_mode,
             "entropy_source": self.entropy_source,
             "backup_operator": self.backup_operator,
+            "budget_mode": self.budget_mode,
+            "budget_value": self.budget_value,
+            "elapsed_time_s": 0.0,
+            "llm_calls": 0,
+            "llm_prompt_tokens": 0,
+            "llm_completion_tokens": 0,
+            "weighted_parent_terms": 0,
+            "weighted_max_weight_mean": 0.0,
+            "weighted_parent_count_mean": 0.0,
         }
 
     def search(self, initial_data_item):
         self._reset_search_stats()
         self.node_table = {}
+        self.llm.reset_counters()
+        start_time = time.time()
 
         root = MCTSNode(data_item=initial_data_item)
         root_hash = root.state_hash()
@@ -87,6 +102,11 @@ class MCTSSolver:
             if sim_idx < 3:
                 self._log_path_trace(path)
 
+            if self._budget_reached(start_time):
+                self.stats["budget_stop_simulation"] = sim_idx + 1
+                break
+
+        self._finalize_runtime_stats(start_time)
         return self._extract_best_tree(root)
 
     def _evaluate_reward(self, node: MCTSNode) -> float:
@@ -224,7 +244,11 @@ class MCTSSolver:
             return sum(parent_vals) / max(1, len(parent_vals))
 
         s = sum(weights)
-        return sum(v * w for v, w in zip(parent_vals, weights)) / max(s, 1e-6)
+        norm_weights = [w / max(s, 1e-6) for w in weights]
+        self.stats["weighted_parent_terms"] += 1
+        self.stats["weighted_max_weight_mean"] += max(norm_weights)
+        self.stats["weighted_parent_count_mean"] += len(parent_vals)
+        return sum(v * w for v, w in zip(parent_vals, norm_weights))
 
     def _backup_aggregate(self, values: List[float]) -> float:
         if not values:
@@ -344,6 +368,15 @@ class MCTSSolver:
             "entropy_ucb": self.enable_entropy_ucb,
             "strict_dag_backprop": self.enable_dag_backprop,
         }
+
+        if self.stats["weighted_parent_terms"] > 0:
+            n = float(self.stats["weighted_parent_terms"])
+            self.stats["weighted_max_weight_mean"] = self.stats["weighted_max_weight_mean"] / n
+            self.stats["weighted_parent_count_mean"] = self.stats["weighted_parent_count_mean"] / n
+
+        if self.track_structure_quality:
+            out_stats["structure_quality"] = self._structure_quality_metrics(root, proof)
+
         out_stats.update(self.stats)
 
         return {
