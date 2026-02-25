@@ -73,6 +73,21 @@ python compare_baselines.py \
 4. **论文表格直出统计**
    - `compare_mcts_budgets.py` 新增理论列导出：`bellman_residual_mean`、`ucb_calibration_mean`、`weighted_parent_var_proxy_mean`。
 
+## 论文证明版补充（本次）
+1. **定理假设对应的运行指标**
+   - 新增 `theory_eta_contraction_gap_mean`：用于观测 `|running - parent_agg|` 的收缩代理。
+   - 新增 `theory_conservative_gap_mean`：用于观测 `|parent_agg - conservative_parent|` 的稳健偏差代理。
+   - 新增 `theory_unique_state_ratio`：用于观测 DAG 状态复用强度（unique states / simulations）。
+2. **证明报告脚本**
+   - 新增 `generate_theory_report.py`，从 `mcts_prediction_<split>.jsonl` 聚合上述理论指标并输出 JSON 报告。
+
+示例：
+```bash
+python generate_theory_report.py \
+  --prediction_file ../../output_dir/etree_task1/test/.../epoch_tree/dev/mcts_prediction_dev.jsonl \
+  --save_json theory_report_dev.json
+```
+
 ## FAQ：改进“可证明加权结构回报”是否要改原代码？
 结论：**要改，但改动范围可控，不需要推翻 PPO 主线**。
 

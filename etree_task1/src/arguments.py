@@ -121,6 +121,7 @@ def get_args():
     parser.add_argument('--mcts_theory_eta', type=float, default=0.5)
     parser.add_argument('--mcts_track_bellman_residual', type=str2bool, default=True)
     parser.add_argument('--mcts_calibration_beta', type=float, default=0.5)
+    parser.add_argument('--mcts_track_proof_theory', type=str2bool, default=True)
     parser.add_argument('--mcts_ci_alpha', type=float, default=0.05)
     parser.add_argument('--mcts_budget_mode', type=str, default='none', choices=['none', 'llm_calls', 'wall_clock'])
     parser.add_argument('--mcts_budget_value', type=float, default=0.0)

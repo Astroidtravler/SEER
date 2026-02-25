@@ -37,6 +37,7 @@ class MCTSSolver:
         self.budget_mode = getattr(args, "mcts_budget_mode", "none")
         self.budget_value = float(getattr(args, "mcts_budget_value", 0.0))
         self.track_structure_quality = bool(getattr(args, "mcts_track_structure_quality", True))
+        self.track_proof_theory = bool(getattr(args, "mcts_track_proof_theory", True))
 
         self.rollout_policy = getattr(args, "mcts_rollout_policy", "max_ucb")
         self.reward_backend = getattr(args, "mcts_reward_backend", "llm_judge_discrete")
@@ -80,6 +81,11 @@ class MCTSSolver:
             "bellman_residual_count": 0,
             "ucb_calibration_mean": 0.0,
             "ucb_calibration_count": 0,
+            "theory_eta_contraction_gap_mean": 0.0,
+            "theory_eta_contraction_gap_count": 0,
+            "theory_conservative_gap_mean": 0.0,
+            "theory_conservative_gap_count": 0,
+            "theory_unique_state_ratio": 0.0,
         }
 
     def search(self, initial_data_item):
@@ -293,11 +299,17 @@ class MCTSSolver:
         # conservative term is reserved for robustness control via objective_mode.
         del conservative_parent
         mixed = (1.0 - self.theory_eta) * running + self.theory_eta * parent_agg
+        if self.track_proof_theory:
+            self.stats["theory_eta_contraction_gap_mean"] += abs(running - parent_agg)
+            self.stats["theory_eta_contraction_gap_count"] += 1
         return node.r_t + self.gamma * mixed
 
     def _compute_backup_target(self, node: MCTSNode, running: float) -> float:
         parent_agg = self._aggregate_parent_value(node)
         conservative_parent = min([p.V_t for p in node.parents], default=parent_agg)
+        if self.track_proof_theory:
+            self.stats["theory_conservative_gap_mean"] += abs(parent_agg - conservative_parent)
+            self.stats["theory_conservative_gap_count"] += 1
         if self.objective_mode == "seer":
             return node.r_t + self.gamma * parent_agg
         if self.objective_mode == "conservative":
@@ -313,6 +325,7 @@ class MCTSSolver:
             target = self._compute_backup_target(node, running)
             if self.track_bellman_residual:
                 residual = abs(target - node.V_t)
+                node.last_bellman_residual = residual
                 self.stats["bellman_residual_mean"] += residual
                 self.stats["bellman_residual_max"] = max(self.stats["bellman_residual_max"], residual)
                 self.stats["bellman_residual_count"] += 1
@@ -334,6 +347,7 @@ class MCTSSolver:
             graph_target = self._compute_backup_target(node, node.V_t)
             if self.track_bellman_residual:
                 residual = abs(graph_target - node.V_t)
+                node.last_bellman_residual = residual
                 self.stats["bellman_residual_mean"] += residual
                 self.stats["bellman_residual_max"] = max(self.stats["bellman_residual_max"], residual)
                 self.stats["bellman_residual_count"] += 1
@@ -429,6 +443,19 @@ class MCTSSolver:
             self.stats["ucb_calibration_mean"] = (
                 self.stats["ucb_calibration_mean"] / float(self.stats["ucb_calibration_count"])
             )
+        if self.stats["theory_eta_contraction_gap_count"] > 0:
+            self.stats["theory_eta_contraction_gap_mean"] = (
+                self.stats["theory_eta_contraction_gap_mean"]
+                / float(self.stats["theory_eta_contraction_gap_count"])
+            )
+        if self.stats["theory_conservative_gap_count"] > 0:
+            self.stats["theory_conservative_gap_mean"] = (
+                self.stats["theory_conservative_gap_mean"]
+                / float(self.stats["theory_conservative_gap_count"])
+            )
+        self.stats["theory_unique_state_ratio"] = float(len(self.node_table)) / max(
+            1.0, float(self.max_simulations)
+        )
 
         if self.track_structure_quality:
             out_stats["structure_quality"] = self._structure_quality_metrics(root, proof)

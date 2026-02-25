@@ -44,6 +44,7 @@ class MCTSNode:
         self.V_t = 0.0
         self.prior_p = 0.0
         self.node_hash: Optional[str] = None
+        self.last_bellman_residual: Optional[float] = None
 
         # priors attached to incoming edges (for weighted parent aggregation)
         self.incoming_prior: Dict[str, float] = {}
