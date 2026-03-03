@@ -53,6 +53,12 @@ def main():
     dag_eq_violation = th.get('dag_equivalence_violation_count', {}).get('mean', float('nan'))
     checks['dag_equivalence_invariant_pass'] = _is_num(dag_eq_violation) and dag_eq_violation <= 0.0
 
+    convex_violation = th.get('theory_parametric_convex_violation_count', {}).get('mean', float('nan'))
+    checks['parametric_convexity_invariant_pass'] = _is_num(convex_violation) and convex_violation <= 0.0
+
+    conservative_violation = th.get('theory_conservative_order_violation_count', {}).get('mean', float('nan'))
+    checks['conservative_order_invariant_pass'] = _is_num(conservative_violation) and conservative_violation <= 0.0
+
     ece = th.get('ece_proxy_mean', {}).get('mean', float('nan'))
     temp = th.get('temperature_scale_mean', {}).get('mean', float('nan'))
     checks['ece_observable'] = _is_num(ece)
@@ -78,6 +84,8 @@ def main():
             'bellman_residual_mean': resid,
             'theory_unique_state_ratio': dag_reuse,
             'dag_equivalence_violation_count': dag_eq_violation,
+            'theory_parametric_convex_violation_count': convex_violation,
+            'theory_conservative_order_violation_count': conservative_violation,
             'ece_proxy_mean': ece,
             'temperature_scale_mean': temp,
         }

@@ -1,4 +1,4 @@
-"""Check whether code paths corresponding to Theorem 1/2/3 are implemented."""
+"""Check theorem-to-implementation correspondence for strict proof claims."""
 
 import argparse
 import json
@@ -6,7 +6,8 @@ import re
 
 
 def has(path, patterns):
-    txt = open(path, 'r', encoding='utf-8').read()
+    with open(path, 'r', encoding='utf-8') as f:
+        txt = f.read()
     return all(re.search(p, txt) for p in patterns)
 
 
@@ -16,19 +17,32 @@ def main():
     args = p.parse_args()
 
     checks = {
-        'theorem1_weighted_return_impl': has(
+        'theorem1_parametric_contraction_impl': has(
             'mcts_solver.py',
-            [r'weight_mode', r'inv_var', r'weighted_parent_var_proxy_mean', r'objective_mode == "conservative"'],
+            [
+                r'def _validate_theorem_assumptions',
+                r'gamma in \[0,1\)',
+                r'def _theory_operator',
+                r'theory_parametric_convex_violation_count',
+                r'objective_mode == "parametric"',
+            ],
         ),
-        'theorem2_parametric_operator_impl': has(
+        'theorem2_conservative_order_impl': has(
             'mcts_solver.py',
-            [r'def _theory_operator', r'mcts_theory_eta', r'objective_mode == "parametric"'],
+            [
+                r'objective_mode == "conservative"',
+                r'conservative_parent = min',
+                r'theory_conservative_order_violation_count',
+            ],
         ),
-        'theorem3_calibrated_entropy_ucb_impl': has(
+        'theorem3_dag_equivalence_impl': has(
+            'mcts_node.py',
+            [r'def canonical_state', r'Two states are equivalent iff'],
+        ) and has(
             'mcts_solver.py',
-            [r'def _compute_ece_proxy', r'def _calibrated_entropy_scale', r'calibration_mode == "ece_temp"'],
+            [r'def _check_dag_equivalence', r'dag_equivalence_violation_count', r'child_hash in self.node_table'],
         ),
-        'theorem3_cli_flags_impl': has(
+        'theorem_calibration_flags_impl': has(
             'arguments.py',
             [r'mcts_calibration_mode', r'mcts_ece_bins', r'mcts_calibration_min_t', r'mcts_calibration_max_t'],
         ),

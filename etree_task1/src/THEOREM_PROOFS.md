@@ -9,7 +9,7 @@
   T_\eta(s) = r(s) + \gamma\big((1-\eta)x + \eta y\big),
   \]
   其中 \(x\) 对应 `running`，\(y\) 对应 `parent_agg`，\(\eta\in[0,1]\)。
-- 参见：`mcts_solver.py::_theory_operator` 与 `_compute_backup_target`。
+- 参见：`mcts_solver.py::_validate_theorem_assumptions`、`_theory_operator` 与 `_compute_backup_target`。
 
 ## 假设
 
@@ -79,6 +79,8 @@ s_1 \sim s_2 \iff \text{canonical\_state}(s_1)=\text{canonical\_state}(s_2),
 - `mcts_node.py::canonical_state()` 给出等价关系定义。
 - `mcts_solver.py::_check_dag_equivalence()` 在每次合并时检查 invariant。
 - 指标 `dag_equivalence_violation_count` 应为 0。
+- 参数化凸组合不变量：`theory_parametric_convex_violation_count` 应为 0。
+- conservative 顺序不变量：`theory_conservative_order_violation_count` 应为 0。
 
 ## 与实验协议的对应
 

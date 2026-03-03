@@ -43,6 +43,8 @@ class MCTSSolver:
         self.track_structure_quality = bool(getattr(args, "mcts_track_structure_quality", True))
         self.track_proof_theory = bool(getattr(args, "mcts_track_proof_theory", True))
 
+        self._validate_theorem_assumptions()
+
         self.rollout_policy = getattr(args, "mcts_rollout_policy", "max_ucb")
         self.reward_backend = getattr(args, "mcts_reward_backend", "llm_judge_discrete")
 
@@ -50,6 +52,18 @@ class MCTSSolver:
 
         self.node_table: Dict[str, MCTSNode] = {}
         self.stats = {}
+
+    def _validate_theorem_assumptions(self) -> None:
+        """Fail fast when theorem assumptions are violated.
+
+        The strict theorem statements used in the project require:
+        1) discount factor gamma in [0, 1)
+        2) eta in [0, 1]
+        """
+        if not (0.0 <= self.gamma < 1.0):
+            raise ValueError(f"Theorem assumption A1 violated: expected gamma in [0,1), got {self.gamma}")
+        if not (0.0 <= self.theory_eta <= 1.0):
+            raise ValueError(f"Theorem assumption A2 violated: expected eta in [0,1], got {self.theory_eta}")
 
     def _reset_search_stats(self):
         self.stats = {
@@ -100,6 +114,8 @@ class MCTSSolver:
             "theory_contraction_bound": self.gamma,
             "dag_equivalence_violation_count": 0,
             "dag_equivalence_check_count": 0,
+            "theory_parametric_convex_violation_count": 0,
+            "theory_conservative_order_violation_count": 0,
         }
 
     def search(self, initial_data_item):
@@ -323,6 +339,10 @@ class MCTSSolver:
         # conservative term is reserved for robustness control via objective_mode.
         del conservative_parent
         mixed = (1.0 - self.theory_eta) * running + self.theory_eta * parent_agg
+        lo = min(running, parent_agg) - 1e-9
+        hi = max(running, parent_agg) + 1e-9
+        if not (lo <= mixed <= hi):
+            self.stats["theory_parametric_convex_violation_count"] += 1
         if self.track_proof_theory:
             self.stats["theory_eta_contraction_gap_mean"] += abs(running - parent_agg)
             self.stats["theory_eta_contraction_gap_count"] += 1
@@ -331,6 +351,8 @@ class MCTSSolver:
     def _compute_backup_target(self, node: MCTSNode, running: float) -> float:
         parent_agg = self._aggregate_parent_value(node)
         conservative_parent = min([p.V_t for p in node.parents], default=parent_agg)
+        if conservative_parent - parent_agg > 1e-9:
+            self.stats["theory_conservative_order_violation_count"] += 1
         if self.track_proof_theory:
             self.stats["theory_conservative_gap_mean"] += abs(parent_agg - conservative_parent)
             self.stats["theory_conservative_gap_count"] += 1
