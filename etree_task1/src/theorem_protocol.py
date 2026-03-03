@@ -64,6 +64,20 @@ def main():
     checks['ece_observable'] = _is_num(ece)
     checks['temperature_observable'] = _is_num(temp)
 
+    lagrangian = th.get('theory5_lagrangian', {}).get('mean', float('nan'))
+    feasible = th.get('theory5_feasible_indicator', {}).get('mean', float('nan'))
+    checks['theorem5_lagrangian_observable'] = _is_num(lagrangian)
+    checks['theorem5_feasibility_observable'] = _is_num(feasible)
+
+    qhat = th.get('theory6_coverage_rate_qhat', {}).get('mean', float('nan'))
+    min_qhat = th.get('theory6_min_prefix_qhat', {}).get('mean', float('nan'))
+    lockin_prod = th.get('theory6_lockin_upper_bound_prod', {}).get('mean', float('nan'))
+    lockin_minq = th.get('theory6_lockin_upper_bound_minq', {}).get('mean', float('nan'))
+    checks['theorem6_qhat_in_0_1'] = _is_num(qhat) and 0.0 <= qhat <= 1.0
+    checks['theorem6_min_qhat_in_0_1'] = _is_num(min_qhat) and 0.0 <= min_qhat <= 1.0
+    checks['theorem6_lockin_bound_in_0_1'] = _is_num(lockin_prod) and 0.0 <= lockin_prod <= 1.0
+    checks['theorem6_lockin_bound_minq_in_0_1'] = _is_num(lockin_minq) and 0.0 <= lockin_minq <= 1.0
+
     # theorem assumption checks (for appendix-level rigor)
     checks['assumption_discount_in_0_1'] = 0.0 <= args.gamma < 1.0
     checks['assumption_eta_in_0_1'] = 0.0 <= args.eta <= 1.0
@@ -88,6 +102,12 @@ def main():
             'theory_conservative_order_violation_count': conservative_violation,
             'ece_proxy_mean': ece,
             'temperature_scale_mean': temp,
+            'theory5_lagrangian': lagrangian,
+            'theory5_feasible_indicator': feasible,
+            'theory6_coverage_rate_qhat': qhat,
+            'theory6_min_prefix_qhat': min_qhat,
+            'theory6_lockin_upper_bound_prod': lockin_prod,
+            'theory6_lockin_upper_bound_minq': lockin_minq,
         }
     }
 

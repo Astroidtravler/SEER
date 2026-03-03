@@ -3,7 +3,7 @@ import math
 import random
 import time
 from collections import deque
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from llm_engine import LLMEngine
 from mcts_node import Action, MCTSNode
@@ -42,6 +42,9 @@ class MCTSSolver:
         self.budget_value = float(getattr(args, "mcts_budget_value", 0.0))
         self.track_structure_quality = bool(getattr(args, "mcts_track_structure_quality", True))
         self.track_proof_theory = bool(getattr(args, "mcts_track_proof_theory", True))
+        self.theory5_lambda = max(0.0, float(getattr(args, "mcts_theory5_lambda", 0.0)))
+        self.theory6_rho = min(1.0, max(0.0, float(getattr(args, "mcts_theory6_rho", 1.0))))
+        self.theory6_pmin = min(1.0, max(1e-9, float(getattr(args, "mcts_theory6_pmin", 0.05))))
 
         self._validate_theorem_assumptions()
 
@@ -52,6 +55,11 @@ class MCTSSolver:
 
         self.node_table: Dict[str, MCTSNode] = {}
         self.stats = {}
+        self._coverage_seen_keys = set()
+        self._coverage_total_actions = 0
+        self._coverage_neff = 0
+        self._coverage_min_prefix_qhat = 1.0
+        self._lockin_product_bound = 1.0
 
     def _validate_theorem_assumptions(self) -> None:
         """Fail fast when theorem assumptions are violated.
@@ -64,6 +72,10 @@ class MCTSSolver:
             raise ValueError(f"Theorem assumption A1 violated: expected gamma in [0,1), got {self.gamma}")
         if not (0.0 <= self.theory_eta <= 1.0):
             raise ValueError(f"Theorem assumption A2 violated: expected eta in [0,1], got {self.theory_eta}")
+        if not (0.0 <= self.theory6_rho <= 1.0):
+            raise ValueError(f"Theorem assumption A6.2 violated: expected rho in [0,1], got {self.theory6_rho}")
+        if not (0.0 < self.theory6_pmin <= 1.0):
+            raise ValueError(f"Theorem assumption A6.3 violated: expected pmin in (0,1], got {self.theory6_pmin}")
 
     def _reset_search_stats(self):
         self.stats = {
@@ -116,12 +128,31 @@ class MCTSSolver:
             "dag_equivalence_check_count": 0,
             "theory_parametric_convex_violation_count": 0,
             "theory_conservative_order_violation_count": 0,
+            "theory5_lambda": self.theory5_lambda,
+            "theory5_budget_B": self.budget_value,
+            "theory5_cost": 0.0,
+            "theory5_reward_proxy": 0.0,
+            "theory5_lagrangian": 0.0,
+            "theory5_feasible_indicator": 0.0,
+            "theory6_rho": self.theory6_rho,
+            "theory6_pmin": self.theory6_pmin,
+            "theory6_total_action_visits_T": 0,
+            "theory6_effective_expansions_neff": 0,
+            "theory6_coverage_rate_qhat": 0.0,
+            "theory6_min_prefix_qhat": 0.0,
+            "theory6_lockin_upper_bound_prod": 1.0,
+            "theory6_lockin_upper_bound_minq": 1.0,
         }
 
     def search(self, initial_data_item):
         self._reset_search_stats()
         self.node_table = {}
         self.llm.reset_counters()
+        self._coverage_seen_keys = set()
+        self._coverage_total_actions = 0
+        self._coverage_neff = 0
+        self._coverage_min_prefix_qhat = 1.0
+        self._lockin_product_bound = 1.0
         start_time = time.time()
 
         root = MCTSNode(data_item=initial_data_item)
@@ -137,6 +168,7 @@ class MCTSSolver:
                 expanded = self._expand(node)
                 if expanded:
                     node = self._pick_rollout_child(parent=node, expanded=expanded)
+                    self._record_action_coverage(node)
                     path.append(node)
                 else:
                     self.stats["fallback_empty_expansion"] += 1
@@ -222,6 +254,7 @@ class MCTSSolver:
                     ],
                 )
             _, cur, _ = scored[0]
+            self._record_action_coverage(cur)
             path.append(cur)
         return cur
 
@@ -278,6 +311,31 @@ class MCTSSolver:
         self.stats["dag_equivalence_check_count"] += 1
         if candidate.canonical_state() != merged.canonical_state():
             self.stats["dag_equivalence_violation_count"] += 1
+
+
+    def _action_coverage_key(self, node: MCTSNode) -> Tuple[str, ...]:
+        if node.logical_parent_ids:
+            return tuple(sorted(str(x) for x in node.logical_parent_ids))
+        action_text = str(node.action_taken or "")
+        return (action_text.strip().lower(),)
+
+    def _record_action_coverage(self, node: MCTSNode) -> None:
+        # Theorem 6 instrumentation: prefix coverage q_hat and lock-in probability upper bound.
+        qhat_prev = 1.0
+        if self._coverage_total_actions > 0:
+            qhat_prev = self._coverage_neff / float(self._coverage_total_actions)
+        factor = 1.0 - self.theory6_rho * qhat_prev * self.theory6_pmin
+        factor = min(1.0, max(0.0, factor))
+        self._lockin_product_bound *= factor
+
+        self._coverage_total_actions += 1
+        k = self._action_coverage_key(node)
+        if k not in self._coverage_seen_keys:
+            self._coverage_seen_keys.add(k)
+            self._coverage_neff += 1
+
+        qhat = self._coverage_neff / float(self._coverage_total_actions)
+        self._coverage_min_prefix_qhat = min(self._coverage_min_prefix_qhat, qhat)
 
     def _aggregate_parent_value(self, node: MCTSNode) -> float:
         if not node.parents:
@@ -497,6 +555,15 @@ class MCTSSolver:
         )
         return q_value + exploration
 
+
+    def _theory5_cost(self) -> float:
+        if self.budget_mode == "wall_clock":
+            return float(self.stats.get("elapsed_time_s", 0.0))
+        if self.budget_mode == "llm_calls":
+            return float(self.stats.get("llm_calls", 0.0))
+        # default surrogate cost when budget mode is disabled
+        return float(self.stats.get("llm_calls", 0.0))
+
     def _extract_best_tree(self, root):
         proof = []
         cur = root
@@ -565,6 +632,17 @@ class MCTSSolver:
         self.stats["theory_unique_state_ratio"] = float(len(self.node_table)) / max(
             1.0, float(self.max_simulations)
         )
+        self.stats["theory6_total_action_visits_T"] = int(self._coverage_total_actions)
+        self.stats["theory6_effective_expansions_neff"] = int(self._coverage_neff)
+        if self._coverage_total_actions > 0:
+            self.stats["theory6_coverage_rate_qhat"] = self._coverage_neff / float(self._coverage_total_actions)
+            self.stats["theory6_min_prefix_qhat"] = self._coverage_min_prefix_qhat
+        self.stats["theory6_lockin_upper_bound_prod"] = self._lockin_product_bound
+        minq = self.stats.get("theory6_min_prefix_qhat", 0.0)
+        self.stats["theory6_lockin_upper_bound_minq"] = (
+            max(0.0, 1.0 - self.theory6_rho * self.theory6_pmin * minq)
+            ** max(0, self._coverage_total_actions)
+        )
         if self.stats["theory_contraction_ratio_count"] > 0:
             self.stats["theory_contraction_ratio_mean"] = (
                 self.stats["theory_contraction_ratio_mean"]
@@ -573,6 +651,16 @@ class MCTSSolver:
 
         if self.track_structure_quality:
             out_stats["structure_quality"] = self._structure_quality_metrics(root, proof)
+
+        reward_proxy = 1.0 if root.H and any(root.H == v for v in triples.values()) else 0.0
+        cost_val = self._theory5_cost()
+        budget_B = self.budget_value if self.budget_mode != "none" else 0.0
+        self.stats["theory5_reward_proxy"] = reward_proxy
+        self.stats["theory5_cost"] = cost_val
+        self.stats["theory5_budget_B"] = budget_B
+        self.stats["theory5_lambda"] = self.theory5_lambda
+        self.stats["theory5_lagrangian"] = reward_proxy - self.theory5_lambda * (cost_val - budget_B)
+        self.stats["theory5_feasible_indicator"] = 1.0 if (self.budget_mode == "none" or cost_val <= budget_B) else 0.0
 
         out_stats.update(self.stats)
 

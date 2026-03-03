@@ -130,6 +130,9 @@ def get_args():
     parser.add_argument('--mcts_budget_mode', type=str, default='none', choices=['none', 'llm_calls', 'wall_clock'])
     parser.add_argument('--mcts_budget_value', type=float, default=0.0)
     parser.add_argument('--mcts_track_structure_quality', type=str2bool, default=True)
+    parser.add_argument('--mcts_theory5_lambda', type=float, default=0.0)
+    parser.add_argument('--mcts_theory6_rho', type=float, default=1.0)
+    parser.add_argument('--mcts_theory6_pmin', type=float, default=0.05)
 
     args = parser.parse_args()  # 解析参数
 

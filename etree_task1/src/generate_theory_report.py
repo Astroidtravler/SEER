@@ -42,6 +42,18 @@ def main():
         "temperature_scale_mean": [],
         "dag_equivalence_violation_count": [],
         "dag_equivalence_check_count": [],
+        "theory5_reward_proxy": [],
+        "theory5_cost": [],
+        "theory5_budget_B": [],
+        "theory5_lambda": [],
+        "theory5_lagrangian": [],
+        "theory5_feasible_indicator": [],
+        "theory6_total_action_visits_T": [],
+        "theory6_effective_expansions_neff": [],
+        "theory6_coverage_rate_qhat": [],
+        "theory6_min_prefix_qhat": [],
+        "theory6_lockin_upper_bound_prod": [],
+        "theory6_lockin_upper_bound_minq": [],
     }
 
     with open(args.prediction_file, "r", encoding="utf-8") as f:
@@ -67,6 +79,10 @@ def main():
         "temperature_signal": report["temperature_scale_mean"]["mean"],
         "dag_reuse_signal": report["theory_unique_state_ratio"]["mean"],
         "dag_equivalence_violation": report["dag_equivalence_violation_count"]["mean"],
+        "budget_lagrangian_signal": report["theory5_lagrangian"]["mean"],
+        "budget_feasible_signal": report["theory5_feasible_indicator"]["mean"],
+        "coverage_qhat_signal": report["theory6_coverage_rate_qhat"]["mean"],
+        "lockin_upper_bound_signal": report["theory6_lockin_upper_bound_prod"]["mean"],
     }
 
     with open(args.save_json, "w", encoding="utf-8") as f:

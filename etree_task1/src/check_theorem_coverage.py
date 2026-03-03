@@ -42,9 +42,29 @@ def main():
             'mcts_solver.py',
             [r'def _check_dag_equivalence', r'dag_equivalence_violation_count', r'child_hash in self.node_table'],
         ),
-        'theorem_calibration_flags_impl': has(
+        'theorem4_calibration_flags_impl': has(
             'arguments.py',
             [r'mcts_calibration_mode', r'mcts_ece_bins', r'mcts_calibration_min_t', r'mcts_calibration_max_t'],
+        ),
+        'theorem5_budget_lagrangian_impl': has(
+            'arguments.py',
+            [r'mcts_budget_mode', r'mcts_budget_value', r'mcts_theory5_lambda'],
+        ) and has(
+            'mcts_solver.py',
+            [r'def _theory5_cost', r'theory5_lagrangian', r'theory5_feasible_indicator'],
+        ),
+        'theorem6_structure_lockin_impl': has(
+            'arguments.py',
+            [r'mcts_theory6_rho', r'mcts_theory6_pmin'],
+        ) and has(
+            'mcts_solver.py',
+            [
+                r'def _action_coverage_key',
+                r'def _record_action_coverage',
+                r'theory6_coverage_rate_qhat',
+                r'theory6_lockin_upper_bound_prod',
+                r'theory6_lockin_upper_bound_minq',
+            ],
         ),
     }
 

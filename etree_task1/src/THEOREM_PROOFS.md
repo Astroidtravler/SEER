@@ -88,3 +88,18 @@ s_1 \sim s_2 \iff \text{canonical\_state}(s_1)=\text{canonical\_state}(s_2),
 - 命题 2 对应：`theory_conservative_gap_mean` + baseline delta 显著性。
 - 命题 3 对应：`theory_unique_state_ratio` 与性能/预算联合对比。
 - 严格检查入口：`theorem_protocol.py`（`all_pass`）。
+
+## 定理 5：预算受限目标的拉格朗日表示与 Pareto 等价（实现对应）
+
+- 预算变量：`budget_mode` + `budget_value`；成本代理 `C(π)` 在实现中由 `_theory5_cost()` 给出（wall_clock 或 llm_calls）。
+- 拉格朗日系数：`mcts_theory5_lambda`。
+- 运行期统计：`theory5_reward_proxy`、`theory5_cost`、`theory5_budget_B`、`theory5_lagrangian`、`theory5_feasible_indicator`。
+- 含义：固定 `B` 扫 `λ`，或固定 `λ` 扫 `B`，可得到经验 Pareto 前沿近似。
+
+## 定理 6：结构质量中间变量与 lock-in 上界（实现对应）
+
+- 覆盖 key：`_action_coverage_key()` 以推理动作的 premise-id 集合作为 \
+  \(\kappa(a)\) 的可观测实现。
+- 有效展开数与覆盖率：`theory6_effective_expansions_neff`、`theory6_total_action_visits_T`、`theory6_coverage_rate_qhat`。
+- 前缀下界与锁死上界：`theory6_min_prefix_qhat`、`theory6_lockin_upper_bound_prod`、`theory6_lockin_upper_bound_minq`。
+- 常数参数：`mcts_theory6_rho`（A6.2 系数）和 `mcts_theory6_pmin`（命题3给出的条件采样下界）。
