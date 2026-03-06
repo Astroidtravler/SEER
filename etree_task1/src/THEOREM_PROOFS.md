@@ -103,3 +103,11 @@ s_1 \sim s_2 \iff \text{canonical\_state}(s_1)=\text{canonical\_state}(s_2),
 - 有效展开数与覆盖率：`theory6_effective_expansions_neff`、`theory6_total_action_visits_T`、`theory6_coverage_rate_qhat`。
 - 前缀下界与锁死上界：`theory6_min_prefix_qhat`、`theory6_lockin_upper_bound_prod`、`theory6_lockin_upper_bound_minq`。
 - 常数参数：`mcts_theory6_rho`（A6.2 系数）和 `mcts_theory6_pmin`（命题3给出的条件采样下界）。
+
+## 创新范式补充：Merge as Hypothesis Testing + Self-Consistency Measurement
+
+- Merge 机制：`mcts_merge_paradigm=hypothesis_test` 时，使用 `_accept_merge_by_hypothesis_test()` 对候选节点与已存在节点做“同分布/同值”近似检验（z-score + effect-size 门控），并记录
+  `merge_hypothesis_accept_count` / `merge_hypothesis_reject_count`。
+- Measurement 机制：`mcts_measurement_model=self_consistency` 时，对奖励进行多次测量后由 `_aggregate_measurements()` 聚合；可选
+  `mcts_gls_mode in {none, low_rank, cluster}` 对应鲁棒均值/低秩近似加权/簇一致性聚合。
+- 与 q-controller 的关系：`q_hat` 与 lock-in 上界仍通过 `theory6_*` 指标追踪；上述两机制可视作提高 key 覆盖与测量稳定性的工程实现。

@@ -133,6 +133,13 @@ def get_args():
     parser.add_argument('--mcts_theory5_lambda', type=float, default=0.0)
     parser.add_argument('--mcts_theory6_rho', type=float, default=1.0)
     parser.add_argument('--mcts_theory6_pmin', type=float, default=0.05)
+    parser.add_argument('--mcts_merge_paradigm', type=str, default='hash', choices=['hash', 'hypothesis_test'])
+    parser.add_argument('--mcts_merge_alpha', type=float, default=0.05)
+    parser.add_argument('--mcts_merge_min_effect', type=float, default=0.05)
+    parser.add_argument('--mcts_measurement_model', type=str, default='single', choices=['single', 'self_consistency'])
+    parser.add_argument('--mcts_self_consistency_samples', type=int, default=3)
+    parser.add_argument('--mcts_self_consistency_trim_ratio', type=float, default=0.2)
+    parser.add_argument('--mcts_gls_mode', type=str, default='none', choices=['none', 'low_rank', 'cluster'])
 
     args = parser.parse_args()  # 解析参数
 

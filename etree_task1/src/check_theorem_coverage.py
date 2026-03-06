@@ -66,6 +66,23 @@ def main():
                 r'theory6_lockin_upper_bound_minq',
             ],
         ),
+        'innovation_merge_measurement_impl': has(
+            'arguments.py',
+            [
+                r'mcts_merge_paradigm',
+                r'mcts_measurement_model',
+                r'mcts_self_consistency_samples',
+                r'mcts_gls_mode',
+            ],
+        ) and has(
+            'mcts_solver.py',
+            [
+                r'def _accept_merge_by_hypothesis_test',
+                r'def _aggregate_measurements',
+                r'merge_hypothesis_accept_count',
+                r'self_consistency_mean_std',
+            ],
+        ),
     }
 
     out = {

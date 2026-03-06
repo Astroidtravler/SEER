@@ -78,6 +78,12 @@ def main():
     checks['theorem6_lockin_bound_in_0_1'] = _is_num(lockin_prod) and 0.0 <= lockin_prod <= 1.0
     checks['theorem6_lockin_bound_minq_in_0_1'] = _is_num(lockin_minq) and 0.0 <= lockin_minq <= 1.0
 
+    merge_acc = th.get('merge_hypothesis_accept_count', {}).get('mean', float('nan'))
+    merge_rej = th.get('merge_hypothesis_reject_count', {}).get('mean', float('nan'))
+    sc_std = th.get('self_consistency_mean_std', {}).get('mean', float('nan'))
+    checks['merge_hypothesis_metrics_observable'] = _is_num(merge_acc) and _is_num(merge_rej)
+    checks['self_consistency_std_observable'] = _is_num(sc_std) and sc_std >= 0.0
+
     # theorem assumption checks (for appendix-level rigor)
     checks['assumption_discount_in_0_1'] = 0.0 <= args.gamma < 1.0
     checks['assumption_eta_in_0_1'] = 0.0 <= args.eta <= 1.0
@@ -108,6 +114,9 @@ def main():
             'theory6_min_prefix_qhat': min_qhat,
             'theory6_lockin_upper_bound_prod': lockin_prod,
             'theory6_lockin_upper_bound_minq': lockin_minq,
+            'merge_hypothesis_accept_count': merge_acc,
+            'merge_hypothesis_reject_count': merge_rej,
+            'self_consistency_mean_std': sc_std,
         }
     }
 

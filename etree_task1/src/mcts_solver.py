@@ -45,6 +45,13 @@ class MCTSSolver:
         self.theory5_lambda = max(0.0, float(getattr(args, "mcts_theory5_lambda", 0.0)))
         self.theory6_rho = min(1.0, max(0.0, float(getattr(args, "mcts_theory6_rho", 1.0))))
         self.theory6_pmin = min(1.0, max(1e-9, float(getattr(args, "mcts_theory6_pmin", 0.05))))
+        self.merge_paradigm = getattr(args, "mcts_merge_paradigm", "hash")
+        self.merge_alpha = min(0.5, max(1e-6, float(getattr(args, "mcts_merge_alpha", 0.05))))
+        self.merge_min_effect = max(0.0, float(getattr(args, "mcts_merge_min_effect", 0.05)))
+        self.measurement_model = getattr(args, "mcts_measurement_model", "single")
+        self.self_consistency_samples = max(1, int(getattr(args, "mcts_self_consistency_samples", 3)))
+        self.self_consistency_trim_ratio = min(0.4, max(0.0, float(getattr(args, "mcts_self_consistency_trim_ratio", 0.2))))
+        self.gls_mode = getattr(args, "mcts_gls_mode", "none")
 
         self._validate_theorem_assumptions()
 
@@ -76,6 +83,12 @@ class MCTSSolver:
             raise ValueError(f"Theorem assumption A6.2 violated: expected rho in [0,1], got {self.theory6_rho}")
         if not (0.0 < self.theory6_pmin <= 1.0):
             raise ValueError(f"Theorem assumption A6.3 violated: expected pmin in (0,1], got {self.theory6_pmin}")
+        if self.merge_paradigm not in {"hash", "hypothesis_test"}:
+            raise ValueError(f"Invalid merge paradigm: {self.merge_paradigm}")
+        if self.measurement_model not in {"single", "self_consistency"}:
+            raise ValueError(f"Invalid measurement model: {self.measurement_model}")
+        if self.gls_mode not in {"none", "low_rank", "cluster"}:
+            raise ValueError(f"Invalid gls mode: {self.gls_mode}")
 
     def _reset_search_stats(self):
         self.stats = {
@@ -142,6 +155,13 @@ class MCTSSolver:
             "theory6_min_prefix_qhat": 0.0,
             "theory6_lockin_upper_bound_prod": 1.0,
             "theory6_lockin_upper_bound_minq": 1.0,
+            "merge_paradigm": self.merge_paradigm,
+            "measurement_model": self.measurement_model,
+            "gls_mode": self.gls_mode,
+            "merge_hypothesis_accept_count": 0,
+            "merge_hypothesis_reject_count": 0,
+            "self_consistency_mean_std": 0.0,
+            "self_consistency_count": 0,
         }
 
     def search(self, initial_data_item):
@@ -189,11 +209,48 @@ class MCTSSolver:
         return self._extract_best_tree(root)
 
     def _evaluate_reward(self, node: MCTSNode) -> float:
-        if self.reward_backend == "llm_judge_soft":
-            return self.llm.evaluate_state_raw(node)
         if self.reward_backend == "heuristic_soft":
             return self._heuristic_soft_reward(node)
-        return self.llm.evaluate_state(node)
+        if self.measurement_model == "single":
+            if self.reward_backend == "llm_judge_soft":
+                return self.llm.evaluate_state_raw(node)
+            return self.llm.evaluate_state(node)
+
+        samples = []
+        for _ in range(self.self_consistency_samples):
+            if self.reward_backend == "llm_judge_soft":
+                samples.append(float(self.llm.evaluate_state_raw(node)))
+            else:
+                samples.append(float(self.llm.evaluate_state(node)))
+        return self._aggregate_measurements(samples)
+
+    def _aggregate_measurements(self, samples: List[float]) -> float:
+        if not samples:
+            return 0.0
+        mu = sum(samples) / len(samples)
+        var = sum((x - mu) ** 2 for x in samples) / max(1, len(samples) - 1)
+        std = math.sqrt(max(0.0, var))
+        self.stats["self_consistency_mean_std"] += std
+        self.stats["self_consistency_count"] += 1
+
+        if self.gls_mode == "low_rank":
+            weights = [1.0 / max(1e-6, abs(x - mu) + 1e-3) for x in samples]
+            sw = sum(weights)
+            return sum(w * x for w, x in zip(weights, samples)) / max(1e-6, sw)
+        if self.gls_mode == "cluster":
+            pos = [x for x in samples if x >= mu]
+            neg = [x for x in samples if x < mu]
+            chosen = pos if len(pos) >= len(neg) else neg
+            if not chosen:
+                chosen = samples
+            return sum(chosen) / len(chosen)
+
+        if len(samples) <= 2:
+            return mu
+        k = int(len(samples) * self.self_consistency_trim_ratio)
+        vals = sorted(samples)
+        trimmed = vals[k: len(vals) - k] if len(vals) - 2 * k > 0 else vals
+        return sum(trimmed) / len(trimmed)
 
     def _heuristic_soft_reward(self, node: MCTSNode) -> float:
         if not node.latest_conclusion_id:
@@ -291,6 +348,14 @@ class MCTSSolver:
             if child_hash in self.node_table:
                 merged = self.node_table[child_hash]
                 self._check_dag_equivalence(child, merged)
+                if self._accept_merge_by_hypothesis_test(candidate=child, merged=merged):
+                    merged.add_parent(node, edge_prior=child.prior_p)
+                    node.children[action_str] = merged
+                    self.stats["merge_hits"] += 1
+                    self.stats["merge_hypothesis_accept_count"] += 1
+                    continue
+                self.stats["merge_hypothesis_reject_count"] += 1
+                # fallback to hash merge to preserve DAG consistency under canonical hash identity.
                 merged.add_parent(node, edge_prior=child.prior_p)
                 node.children[action_str] = merged
                 self.stats["merge_hits"] += 1
@@ -302,6 +367,23 @@ class MCTSSolver:
             new_children.append(child)
 
         return new_children
+
+    def _accept_merge_by_hypothesis_test(self, candidate: MCTSNode, merged: MCTSNode) -> bool:
+        if self.merge_paradigm == "hash":
+            return True
+        # Merge as hypothesis testing: H0 = same latent value distribution.
+        n1 = max(1, int(candidate.visits))
+        n2 = max(1, int(merged.visits))
+        if n1 < 2 or n2 < 2:
+            return True
+        m1, m2 = float(candidate.V_t), float(merged.V_t)
+        pooled_se = math.sqrt((1.0 / n1) + (1.0 / n2))
+        if pooled_se <= 1e-9:
+            return abs(m1 - m2) <= self.merge_min_effect
+        z = abs(m1 - m2) / pooled_se
+        # two-sided z critical approximation
+        z_critical = 1.96 if abs(self.merge_alpha - 0.05) < 1e-9 else 2.576
+        return (z <= z_critical) or (abs(m1 - m2) <= self.merge_min_effect)
 
     def _check_dag_equivalence(self, candidate: MCTSNode, merged: MCTSNode) -> None:
         """Runtime invariant check for Graph-MDP state equivalence under transposition merge.
@@ -647,6 +729,10 @@ class MCTSSolver:
             self.stats["theory_contraction_ratio_mean"] = (
                 self.stats["theory_contraction_ratio_mean"]
                 / float(self.stats["theory_contraction_ratio_count"])
+            )
+        if self.stats["self_consistency_count"] > 0:
+            self.stats["self_consistency_mean_std"] = (
+                self.stats["self_consistency_mean_std"] / float(self.stats["self_consistency_count"])
             )
 
         if self.track_structure_quality:

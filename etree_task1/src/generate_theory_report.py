@@ -54,6 +54,9 @@ def main():
         "theory6_min_prefix_qhat": [],
         "theory6_lockin_upper_bound_prod": [],
         "theory6_lockin_upper_bound_minq": [],
+        "merge_hypothesis_accept_count": [],
+        "merge_hypothesis_reject_count": [],
+        "self_consistency_mean_std": [],
     }
 
     with open(args.prediction_file, "r", encoding="utf-8") as f:
@@ -83,6 +86,9 @@ def main():
         "budget_feasible_signal": report["theory5_feasible_indicator"]["mean"],
         "coverage_qhat_signal": report["theory6_coverage_rate_qhat"]["mean"],
         "lockin_upper_bound_signal": report["theory6_lockin_upper_bound_prod"]["mean"],
+        "merge_hypothesis_accept_signal": report["merge_hypothesis_accept_count"]["mean"],
+        "merge_hypothesis_reject_signal": report["merge_hypothesis_reject_count"]["mean"],
+        "self_consistency_std_signal": report["self_consistency_mean_std"]["mean"],
     }
 
     with open(args.save_json, "w", encoding="utf-8") as f:
