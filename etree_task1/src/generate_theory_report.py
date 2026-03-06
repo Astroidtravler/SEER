@@ -57,6 +57,11 @@ def main():
         "merge_hypothesis_accept_count": [],
         "merge_hypothesis_reject_count": [],
         "self_consistency_mean_std": [],
+        "q_controller_expand_candidates_mean": [],
+        "q_controller_diverse_expand_count": [],
+        "q_controller_qhat_deficit_mean": [],
+        "gls_parent_applied_count": [],
+        "gls_backup_applied_count": [],
     }
 
     with open(args.prediction_file, "r", encoding="utf-8") as f:
@@ -89,6 +94,11 @@ def main():
         "merge_hypothesis_accept_signal": report["merge_hypothesis_accept_count"]["mean"],
         "merge_hypothesis_reject_signal": report["merge_hypothesis_reject_count"]["mean"],
         "self_consistency_std_signal": report["self_consistency_mean_std"]["mean"],
+        "q_controller_candidates_signal": report["q_controller_expand_candidates_mean"]["mean"],
+        "q_controller_diverse_signal": report["q_controller_diverse_expand_count"]["mean"],
+        "q_controller_deficit_signal": report["q_controller_qhat_deficit_mean"]["mean"],
+        "gls_parent_applied_signal": report["gls_parent_applied_count"]["mean"],
+        "gls_backup_applied_signal": report["gls_backup_applied_count"]["mean"],
     }
 
     with open(args.save_json, "w", encoding="utf-8") as f:

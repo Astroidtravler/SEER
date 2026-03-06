@@ -56,10 +56,12 @@ class LLMEngine:
                     time.sleep(0.5 * (2 ** i))
         raise RuntimeError(f"LLM request failed after retry: {last_err}")
 
-    def generate_actions(self, context, n_candidates=3):
+    def generate_actions(self, context, n_candidates=3, temperature_scale=1.0, diverse=False):
+        mode_line = "Favor semantic diversity across deductions." if diverse else "Prefer the most probable deductions."
         prompt = (
             "You are a strict logical reasoning system. "
-            f"Propose {n_candidates} valid deductions.\n\n"
+            f"Propose {n_candidates} valid deductions.\n"
+            f"{mode_line}\n\n"
             "Rules:\n"
             "1) Each deduction must combine two or more facts.\n"
             "2) Do not repeat facts verbatim.\n"
@@ -71,7 +73,7 @@ class LLMEngine:
         payload = {
             "model": self.model_name,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": self.temperature,
+            "temperature": max(0.0, float(self.temperature) * max(0.2, float(temperature_scale))),
             "max_tokens": 256,
             "logprobs": True,
             "top_logprobs": 1,

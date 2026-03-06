@@ -52,6 +52,11 @@ class MCTSSolver:
         self.self_consistency_samples = max(1, int(getattr(args, "mcts_self_consistency_samples", 3)))
         self.self_consistency_trim_ratio = min(0.4, max(0.0, float(getattr(args, "mcts_self_consistency_trim_ratio", 0.2))))
         self.gls_mode = getattr(args, "mcts_gls_mode", "none")
+        self.enable_q_controller = bool(getattr(args, "mcts_q_controller", True))
+        self.q_target = min(1.0, max(0.0, float(getattr(args, "mcts_q_target", 0.7))))
+        self.q_min_candidates = max(1, int(getattr(args, "mcts_q_min_candidates", 3)))
+        self.q_max_candidates = max(self.q_min_candidates, int(getattr(args, "mcts_q_max_candidates", 8)))
+        self.q_explore_prob = min(1.0, max(0.0, float(getattr(args, "mcts_q_explore_prob", 0.3))))
 
         self._validate_theorem_assumptions()
 
@@ -89,6 +94,8 @@ class MCTSSolver:
             raise ValueError(f"Invalid measurement model: {self.measurement_model}")
         if self.gls_mode not in {"none", "low_rank", "cluster"}:
             raise ValueError(f"Invalid gls mode: {self.gls_mode}")
+        if not (0.0 <= self.q_target <= 1.0):
+            raise ValueError(f"Invalid q_target in [0,1]: {self.q_target}")
 
     def _reset_search_stats(self):
         self.stats = {
@@ -162,6 +169,14 @@ class MCTSSolver:
             "merge_hypothesis_reject_count": 0,
             "self_consistency_mean_std": 0.0,
             "self_consistency_count": 0,
+            "q_controller_enabled": self.enable_q_controller,
+            "q_controller_target": self.q_target,
+            "q_controller_expand_candidates_mean": 0.0,
+            "q_controller_expand_count": 0,
+            "q_controller_diverse_expand_count": 0,
+            "q_controller_qhat_deficit_mean": 0.0,
+            "gls_parent_applied_count": 0,
+            "gls_backup_applied_count": 0,
         }
 
     def search(self, initial_data_item):
@@ -287,6 +302,29 @@ class MCTSSolver:
             )
         self.stats["selection_trace"].append(trace)
 
+    def _current_qhat(self) -> float:
+        if self._coverage_total_actions <= 0:
+            return 1.0
+        return self._coverage_neff / float(self._coverage_total_actions)
+
+    def _q_controller_expand_policy(self) -> Tuple[int, float, bool]:
+        if not self.enable_q_controller:
+            return self.q_min_candidates, 1.0, False
+        qhat = self._current_qhat()
+        deficit = max(0.0, self.q_target - qhat)
+        ratio = deficit / max(self.q_target, 1e-6)
+        n_candidates = int(round(self.q_min_candidates + (self.q_max_candidates - self.q_min_candidates) * ratio))
+        n_candidates = min(self.q_max_candidates, max(self.q_min_candidates, n_candidates))
+        diverse = random.random() < (self.q_explore_prob * ratio)
+        temp_scale = 1.0 + ratio
+
+        self.stats["q_controller_expand_candidates_mean"] += n_candidates
+        self.stats["q_controller_expand_count"] += 1
+        self.stats["q_controller_qhat_deficit_mean"] += deficit
+        if diverse:
+            self.stats["q_controller_diverse_expand_count"] += 1
+        return n_candidates, temp_scale, diverse
+
     def _select(self, node, path):
         cur = node
         path.append(cur)
@@ -317,7 +355,13 @@ class MCTSSolver:
 
     def _expand(self, node):
         context = node.get_context_for_llm()
-        candidates = self.llm.generate_actions(context)
+        n_candidates, temp_scale, diverse = self._q_controller_expand_policy()
+        candidates = self.llm.generate_actions(
+            context,
+            n_candidates=n_candidates,
+            temperature_scale=temp_scale,
+            diverse=diverse,
+        )
         if not candidates:
             return []
 
@@ -355,10 +399,10 @@ class MCTSSolver:
                     self.stats["merge_hypothesis_accept_count"] += 1
                     continue
                 self.stats["merge_hypothesis_reject_count"] += 1
-                # fallback to hash merge to preserve DAG consistency under canonical hash identity.
-                merged.add_parent(node, edge_prior=child.prior_p)
-                node.children[action_str] = merged
-                self.stats["merge_hits"] += 1
+                # hypothesis-test reject: do not merge (avoid false lock-in from forced transposition).
+                child.add_parent(node, edge_prior=child.prior_p)
+                node.children[action_str] = child
+                new_children.append(child)
                 continue
 
             child.add_parent(node, edge_prior=child.prior_p)
@@ -456,6 +500,22 @@ class MCTSSolver:
         self.stats["weighted_entropy_mean"] += self._normalized_entropy(norm_weights)
         if var_proxy_terms:
             self.stats["weighted_parent_var_proxy_mean"] += sum(var_proxy_terms) / len(var_proxy_terms)
+
+        if self.gls_mode == "low_rank":
+            center = sum(parent_vals) / len(parent_vals)
+            gls_weights = [1.0 / max(1e-6, abs(v - center) + 1e-3) for v in parent_vals]
+            s2 = sum(gls_weights)
+            self.stats["gls_parent_applied_count"] += 1
+            return sum(v * w for v, w in zip(parent_vals, gls_weights)) / max(1e-6, s2)
+        if self.gls_mode == "cluster":
+            center = sum(parent_vals) / len(parent_vals)
+            pos = [v for v in parent_vals if v >= center]
+            neg = [v for v in parent_vals if v < center]
+            chosen = pos if len(pos) >= len(neg) else neg
+            if not chosen:
+                chosen = parent_vals
+            self.stats["gls_parent_applied_count"] += 1
+            return sum(chosen) / len(chosen)
         return sum(v * w for v, w in zip(parent_vals, norm_weights))
 
     def _backup_aggregate(self, values: List[float]) -> float:
@@ -472,6 +532,21 @@ class MCTSSolver:
                 return sum(values) / len(values)
             weights = [e / z for e in exps]
             return sum(w * v for w, v in zip(weights, values))
+        if self.gls_mode == "low_rank":
+            center = sum(values) / len(values)
+            w = [1.0 / max(1e-6, abs(v - center) + 1e-3) for v in values]
+            sw = sum(w)
+            self.stats["gls_backup_applied_count"] += 1
+            return sum(v * ww for v, ww in zip(values, w)) / max(1e-6, sw)
+        if self.gls_mode == "cluster":
+            center = sum(values) / len(values)
+            pos = [v for v in values if v >= center]
+            neg = [v for v in values if v < center]
+            chosen = pos if len(pos) >= len(neg) else neg
+            if not chosen:
+                chosen = values
+            self.stats["gls_backup_applied_count"] += 1
+            return sum(chosen) / len(chosen)
         return sum(values) / len(values)
 
     def _theory_operator(self, node: MCTSNode, running: float, parent_agg: float, conservative_parent: float) -> float:
@@ -734,6 +809,10 @@ class MCTSSolver:
             self.stats["self_consistency_mean_std"] = (
                 self.stats["self_consistency_mean_std"] / float(self.stats["self_consistency_count"])
             )
+        if self.stats["q_controller_expand_count"] > 0:
+            n = float(self.stats["q_controller_expand_count"])
+            self.stats["q_controller_expand_candidates_mean"] /= n
+            self.stats["q_controller_qhat_deficit_mean"] /= n
 
         if self.track_structure_quality:
             out_stats["structure_quality"] = self._structure_quality_metrics(root, proof)

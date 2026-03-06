@@ -140,6 +140,11 @@ def get_args():
     parser.add_argument('--mcts_self_consistency_samples', type=int, default=3)
     parser.add_argument('--mcts_self_consistency_trim_ratio', type=float, default=0.2)
     parser.add_argument('--mcts_gls_mode', type=str, default='none', choices=['none', 'low_rank', 'cluster'])
+    parser.add_argument('--mcts_q_controller', type=str2bool, default=True)
+    parser.add_argument('--mcts_q_target', type=float, default=0.7)
+    parser.add_argument('--mcts_q_min_candidates', type=int, default=3)
+    parser.add_argument('--mcts_q_max_candidates', type=int, default=8)
+    parser.add_argument('--mcts_q_explore_prob', type=float, default=0.3)
 
     args = parser.parse_args()  # 解析参数
 

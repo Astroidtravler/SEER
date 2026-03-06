@@ -84,6 +84,14 @@ def main():
     checks['merge_hypothesis_metrics_observable'] = _is_num(merge_acc) and _is_num(merge_rej)
     checks['self_consistency_std_observable'] = _is_num(sc_std) and sc_std >= 0.0
 
+    qcand = th.get('q_controller_expand_candidates_mean', {}).get('mean', float('nan'))
+    qdiv = th.get('q_controller_diverse_expand_count', {}).get('mean', float('nan'))
+    qdef = th.get('q_controller_qhat_deficit_mean', {}).get('mean', float('nan'))
+    gls_parent = th.get('gls_parent_applied_count', {}).get('mean', float('nan'))
+    gls_backup = th.get('gls_backup_applied_count', {}).get('mean', float('nan'))
+    checks['q_controller_observable'] = _is_num(qcand) and _is_num(qdiv) and _is_num(qdef)
+    checks['gls_search_observable'] = _is_num(gls_parent) and _is_num(gls_backup)
+
     # theorem assumption checks (for appendix-level rigor)
     checks['assumption_discount_in_0_1'] = 0.0 <= args.gamma < 1.0
     checks['assumption_eta_in_0_1'] = 0.0 <= args.eta <= 1.0
@@ -117,6 +125,11 @@ def main():
             'merge_hypothesis_accept_count': merge_acc,
             'merge_hypothesis_reject_count': merge_rej,
             'self_consistency_mean_std': sc_std,
+            'q_controller_expand_candidates_mean': qcand,
+            'q_controller_diverse_expand_count': qdiv,
+            'q_controller_qhat_deficit_mean': qdef,
+            'gls_parent_applied_count': gls_parent,
+            'gls_backup_applied_count': gls_backup,
         }
     }
 

@@ -111,3 +111,9 @@ s_1 \sim s_2 \iff \text{canonical\_state}(s_1)=\text{canonical\_state}(s_2),
 - Measurement 机制：`mcts_measurement_model=self_consistency` 时，对奖励进行多次测量后由 `_aggregate_measurements()` 聚合；可选
   `mcts_gls_mode in {none, low_rank, cluster}` 对应鲁棒均值/低秩近似加权/簇一致性聚合。
 - 与 q-controller 的关系：`q_hat` 与 lock-in 上界仍通过 `theory6_*` 指标追踪；上述两机制可视作提高 key 覆盖与测量稳定性的工程实现。
+
+## 工程补充：q-Controller 闭环与 GLS 搜索层落点
+
+- q-Controller 闭环：在 `_expand()` 前调用 `_q_controller_expand_policy()`，根据当前 `q_hat` 缺口动态调节 `n_candidates`、多样化触发概率与温度缩放；统计输出 `q_controller_expand_candidates_mean`、`q_controller_diverse_expand_count`、`q_controller_qhat_deficit_mean`。
+- Merge gate 真拒绝：当 `merge_paradigm=hypothesis_test` 且检验拒绝时，不再 fallback 合并，改为保留独立子节点，避免错误 transposition 导致同质 lock-in。
+- GLS 搜索层：`gls_mode in {low_rank, cluster}` 除 measurement 聚合外，还应用于 `_aggregate_parent_value()` 与 `_backup_aggregate()`，并输出 `gls_parent_applied_count`、`gls_backup_applied_count`。

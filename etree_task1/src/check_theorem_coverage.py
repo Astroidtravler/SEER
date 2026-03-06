@@ -83,6 +83,33 @@ def main():
                 r'self_consistency_mean_std',
             ],
         ),
+        'innovation_q_controller_closed_loop_impl': has(
+            'arguments.py',
+            [
+                r'mcts_q_controller',
+                r'mcts_q_target',
+                r'mcts_q_min_candidates',
+                r'mcts_q_max_candidates',
+                r'mcts_q_explore_prob',
+            ],
+        ) and has(
+            'mcts_solver.py',
+            [
+                r'def _q_controller_expand_policy',
+                r'generate_actions\(',
+                r'q_controller_expand_candidates_mean',
+                r'q_controller_diverse_expand_count',
+            ],
+        ),
+        'innovation_gls_search_layer_impl': has(
+            'mcts_solver.py',
+            [
+                r'gls_parent_applied_count',
+                r'gls_backup_applied_count',
+                r'def _aggregate_parent_value',
+                r'def _backup_aggregate',
+            ],
+        ),
     }
 
     out = {
