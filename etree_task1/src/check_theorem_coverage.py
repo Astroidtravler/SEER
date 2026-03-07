@@ -108,11 +108,21 @@ def main():
                 r'gls_backup_applied_count',
                 r'def _aggregate_parent_value',
                 r'def _backup_aggregate',
+                r'self\.gls_mode == "low_rank"',
+                r'self\.gls_mode == "cluster"',
+                r'gls_parent_bucket_reduced',
             ],
         ),
         'innovation_2plus2_strong_alignment_impl': has(
             'mcts_node.py',
-            [r'"depth"', r'"trace"', r'"latest"'],
+            [
+                r'def canonical_state',
+                r'"depth"',
+                r'"trace"',
+                r'"latest"',
+                r'"action_taken"',
+                r'"used_actions"',
+            ],
         ) and has(
             'mcts_solver.py',
             [r'def _action_coverage_key', r'logical_parent_ids'],
