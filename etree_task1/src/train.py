@@ -16,6 +16,7 @@ from RL_etree import eTree
 from RL_solver import Solver
 from RL_agent import Agent
 from RL_state import Action
+from mcts_solver import MCTSSolver
 sys.path.append("..")
 from entailment_bank_get_metric.eval.run_scorer import get_etree_metric
 
@@ -37,6 +38,51 @@ if gpus:
 
 logger = logging.getLogger(__name__)
 
+
+def run_mcts_mode(args):
+    """Inference runner for LLM+MCTS with official scorer-aligned output."""
+    _, dev, test = load_data(args)
+    solver = MCTSSolver(args)
+
+    if args.do_dev:
+        save_mcts_predictions(args, solver, dev, 'dev')
+    if args.do_test:
+        save_mcts_predictions(args, solver, test, 'test')
+
+
+def save_mcts_predictions(args, solver, dataset, split):
+    out_file = osp.join(args.output_dir, 'epoch_tree', split, f'mcts_prediction_{split}.jsonl')
+    os.makedirs(osp.dirname(out_file), exist_ok=True)
+    with open(out_file, 'w') as f:
+        for item in tqdm(dataset):
+            pred = solver.search(copy.deepcopy(item))
+            proof = pred.get('proof', '')
+            text = {
+                'id': item['id'],
+                'angle': [["question", "answer", "hypothesis", "context"], ["proof"]],
+                'prediction': '$proof$ = ' + proof,
+                'slots': {'proof': proof},
+                'meta': pred.get('meta', {'triples': item.get('meta', {}).get('triples', {})}),
+                'search_stats': pred.get('search_stats', {}),
+            }
+            json.dump(text, f, ensure_ascii=False)
+            f.write('\n')
+    logger.info(f'MCTS {split} prediction saved to: {out_file}')
+
+    if args.mcts_run_official_eval:
+        metric = get_etree_metric(
+            task=args.task,
+            output_dir=osp.join(args.output_dir, 'epoch_tree', split, 'mcts_eval'),
+            split=split,
+            prediction_file=out_file,
+            bleurt_checkpoint=None,
+            use_bleurt_buffer=True,
+            bleurt_buffer_file='../entailment_bank_get_metric/data/buffer/buffer_bleurt_all.json',
+            bleurt_scorer=None,
+        )
+        logger.info('MCTS %s metric: %s', split, metric)
+
+
 def main(args):
     set_seed(args.seed)
     # wandb
@@ -50,6 +96,11 @@ def main(args):
             name=args.wandb_name,
             dir=args.wandb_dir,
         )
+
+    if args.solver_backend == 'mcts':
+        logger.info('Run in MCTS backend mode (inference-only).')
+        run_mcts_mode(args)
+        return
 
     if torch.cuda.device_count() == 1:
         args.device = torch.device('cuda' if torch.cuda.is_available() and args.gpu else "cpu")
