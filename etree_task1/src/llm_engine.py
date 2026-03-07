@@ -58,6 +58,13 @@ class LLMEngine:
 
     def generate_actions(self, context, n_candidates=3, temperature_scale=1.0, diverse=False):
         mode_line = "Favor semantic diversity across deductions." if diverse else "Prefer the most probable deductions."
+        diverse_rules = ""
+        if diverse:
+            diverse_rules = (
+                "4) Use different premise-id combinations across lines; avoid reusing the same pair/set.\n"
+                "5) Avoid paraphrasing an existing fact/conclusion; each conclusion must add new information.\n"
+                "6) Do NOT output a final answer sentence; output only next-step deductions.\n"
+            )
         prompt = (
             "You are a strict logical reasoning system. "
             f"Propose {n_candidates} valid deductions.\n"
@@ -65,7 +72,8 @@ class LLMEngine:
             "Rules:\n"
             "1) Each deduction must combine two or more facts.\n"
             "2) Do not repeat facts verbatim.\n"
-            "3) Output format: <id1> & <id2> -> <new_conclusion>\n\n"
+            "3) Output format: <id1> & <id2> -> <new_conclusion>\n"
+            f"{diverse_rules}\n"
             f"Facts:\n{context}\n\n"
             "Output one deduction per line."
         )

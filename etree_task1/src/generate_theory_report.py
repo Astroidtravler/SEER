@@ -62,6 +62,9 @@ def main():
         "q_controller_qhat_deficit_mean": [],
         "gls_parent_applied_count": [],
         "gls_backup_applied_count": [],
+        "duplicate_key_rate": [],
+        "invalid_action_rate": [],
+        "effective_expansion_ratio": [],
     }
 
     with open(args.prediction_file, "r", encoding="utf-8") as f:
@@ -99,6 +102,9 @@ def main():
         "q_controller_deficit_signal": report["q_controller_qhat_deficit_mean"]["mean"],
         "gls_parent_applied_signal": report["gls_parent_applied_count"]["mean"],
         "gls_backup_applied_signal": report["gls_backup_applied_count"]["mean"],
+        "duplicate_key_rate_signal": report["duplicate_key_rate"]["mean"],
+        "invalid_action_rate_signal": report["invalid_action_rate"]["mean"],
+        "effective_expansion_ratio_signal": report["effective_expansion_ratio"]["mean"],
     }
 
     with open(args.save_json, "w", encoding="utf-8") as f:

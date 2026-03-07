@@ -110,6 +110,13 @@ def main():
                 r'def _backup_aggregate',
             ],
         ),
+        'innovation_2plus2_strong_alignment_impl': has(
+            'mcts_node.py',
+            [r'"depth"', r'"trace"', r'"latest"'],
+        ) and has(
+            'mcts_solver.py',
+            [r'def _action_coverage_key', r'logical_parent_ids'],
+        ),
     }
 
     out = {

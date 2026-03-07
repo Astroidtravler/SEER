@@ -151,10 +151,19 @@ class MCTSNode:
 
         Two states are equivalent iff their canonical_state() are identical.
         """
+        depth = len(self.proof_str)
+        trace_tail_k = 4
+        trace_tail = tuple(self.proof_str[-trace_tail_k:])
+        used_action_ids = tuple(sorted(str(x) for x in self.logical_parent_ids))
         return {
             "hypothesis": self.H,
             "facts": sorted(self.id2sent.items(), key=lambda x: x[0]),
             "used": sorted(self.used_premises.items(), key=lambda x: x[1]),
+            "depth": depth,
+            "trace": trace_tail,
+            "latest": self.latest_conclusion_id,
+            "action_taken": str(self.action_taken or ""),
+            "used_actions": used_action_ids,
         }
 
     def is_terminal(self) -> bool:

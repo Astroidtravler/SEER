@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple
 
 from llm_engine import LLMEngine
 from mcts_node import Action, MCTSNode
+from utils import normalize
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +178,14 @@ class MCTSSolver:
             "q_controller_qhat_deficit_mean": 0.0,
             "gls_parent_applied_count": 0,
             "gls_backup_applied_count": 0,
+            "expansion_candidates_total": 0,
+            "expansion_candidates_kept": 0,
+            "reject_duplicate_key": 0,
+            "reject_semantic_duplicate": 0,
+            "duplicate_key_rate": 0.0,
+            "invalid_action_rate": 0.0,
+            "effective_expansion_ratio": 0.0,
+            "gls_parent_bucket_reduced": 0,
         }
 
     def search(self, initial_data_item):
@@ -366,12 +375,24 @@ class MCTSSolver:
             return []
 
         new_children = []
+        seen_keys_local = set()
         for cand in candidates:
+            self.stats["expansion_candidates_total"] += 1
             action_str = cand.get("action_str", "")
             pre_ids = cand.get("pre_ids", [])
             conclusion = cand.get("conclusion", "")
             if not action_str or not pre_ids or not conclusion:
                 self.stats["reject_bad_candidate"] += 1
+                continue
+
+            cov_key = self._action_coverage_key_from_candidate(cand)
+            if cov_key in seen_keys_local or cov_key in self._coverage_seen_keys:
+                self.stats["reject_duplicate_key"] += 1
+                continue
+            seen_keys_local.add(cov_key)
+
+            if self._is_semantic_duplicate_conclusion(node, conclusion):
+                self.stats["reject_semantic_duplicate"] += 1
                 continue
 
             child = MCTSNode(parent=node, action=action_str)
@@ -403,12 +424,14 @@ class MCTSSolver:
                 child.add_parent(node, edge_prior=child.prior_p)
                 node.children[action_str] = child
                 new_children.append(child)
+                self.stats["expansion_candidates_kept"] += 1
                 continue
 
             child.add_parent(node, edge_prior=child.prior_p)
             self.node_table[child_hash] = child
             node.children[action_str] = child
             new_children.append(child)
+            self.stats["expansion_candidates_kept"] += 1
 
         return new_children
 
@@ -441,9 +464,38 @@ class MCTSSolver:
 
     def _action_coverage_key(self, node: MCTSNode) -> Tuple[str, ...]:
         if node.logical_parent_ids:
+            # task-semantic coverage key: premise set (EntailmentBank premise-pair / set).
             return tuple(sorted(str(x) for x in node.logical_parent_ids))
         action_text = str(node.action_taken or "")
         return (action_text.strip().lower(),)
+
+    def _action_coverage_key_from_candidate(self, candidate: Dict) -> Tuple[str, ...]:
+        pre_ids = candidate.get("pre_ids", [])
+        if pre_ids:
+            return tuple(sorted(str(x) for x in pre_ids))
+        raw = str(candidate.get("action_str", "") or candidate.get("raw_line", ""))
+        return (raw.strip().lower(),)
+
+    def _is_semantic_duplicate_conclusion(self, node: MCTSNode, conclusion: str) -> bool:
+        cand = normalize(conclusion)
+        if not cand:
+            return True
+        if cand in node.sent2id:
+            return True
+        cset = set(cand.split())
+        if not cset:
+            return True
+        for sent in node.id2sent.values():
+            fact = normalize(sent)
+            if not fact:
+                continue
+            if fact == cand:
+                return True
+            fset = set(fact.split())
+            overlap = len(cset & fset) / max(1, len(cset | fset))
+            if overlap >= 0.92:
+                return True
+        return False
 
     def _record_action_coverage(self, node: MCTSNode) -> None:
         # Theorem 6 instrumentation: prefix coverage q_hat and lock-in probability upper bound.
@@ -467,10 +519,26 @@ class MCTSSolver:
         if not node.parents:
             return 0.0
 
+        parents = list(node.parents)
+        if self.gls_mode in {"low_rank", "cluster"} and len(parents) > 1:
+            buckets = {}
+            for p in parents:
+                sig = (
+                    len(p.proof_str),
+                    len(p.used_premises),
+                    hash(tuple(p.proof_str[-2:])),
+                )
+                prev = buckets.get(sig)
+                if prev is None or p.visits > prev.visits:
+                    buckets[sig] = p
+            reduced = list(buckets.values())
+            self.stats["gls_parent_bucket_reduced"] += max(0, len(parents) - len(reduced))
+            parents = reduced
+
         parent_vals = []
         weights = []
         var_proxy_terms = []
-        for parent in node.parents:
+        for parent in parents:
             parent_vals.append(parent.V_t)
             ph = parent.node_hash or parent.state_hash()
             prior = node.incoming_prior.get(ph, 1e-6)
@@ -813,6 +881,22 @@ class MCTSSolver:
             n = float(self.stats["q_controller_expand_count"])
             self.stats["q_controller_expand_candidates_mean"] /= n
             self.stats["q_controller_qhat_deficit_mean"] /= n
+
+        total_candidates = float(self.stats.get("expansion_candidates_total", 0))
+        if total_candidates > 0:
+            dup = float(self.stats.get("reject_duplicate_key", 0))
+            invalid = float(
+                self.stats.get("reject_too_few_premises", 0)
+                + self.stats.get("reject_missing_premises", 0)
+                + self.stats.get("reject_empty_conclusion", 0)
+                + self.stats.get("reject_duplicate_conclusion", 0)
+                + self.stats.get("reject_bad_candidate", 0)
+                + self.stats.get("reject_semantic_duplicate", 0)
+                + self.stats.get("reject_duplicate_key", 0)
+            )
+            self.stats["duplicate_key_rate"] = dup / total_candidates
+            self.stats["invalid_action_rate"] = invalid / total_candidates
+            self.stats["effective_expansion_ratio"] = float(self._coverage_neff) / total_candidates
 
         if self.track_structure_quality:
             out_stats["structure_quality"] = self._structure_quality_metrics(root, proof)
