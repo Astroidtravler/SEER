@@ -49,6 +49,9 @@ def load_theory_stats(output_dir: str):
             "weighted_parent_var_proxy_mean": float("nan"),
             "ece_proxy_mean": float("nan"),
             "temperature_scale_mean": float("nan"),
+            "theory6_coverage_rate_qhat": float("nan"),
+            "theory6_lockin_upper_bound_prod": float("nan"),
+            "theory6_lockin_upper_bound_minq": float("nan"),
         }
     vals = {
         "bellman_residual_mean": [],
@@ -56,6 +59,9 @@ def load_theory_stats(output_dir: str):
         "weighted_parent_var_proxy_mean": [],
         "ece_proxy_mean": [],
         "temperature_scale_mean": [],
+        "theory6_coverage_rate_qhat": [],
+        "theory6_lockin_upper_bound_prod": [],
+        "theory6_lockin_upper_bound_minq": [],
         "merge_hypothesis_accept_count": [],
         "merge_hypothesis_reject_count": [],
         "q_controller_expand_candidates_mean": [],
@@ -116,6 +122,7 @@ def main():
         vals = []
         residual_vals, calib_vals, varproxy_vals = [], [], []
         ece_vals, temp_vals = [], []
+        qhat_vals, lockin_prod_vals, lockin_minq_vals = [], [], []
         merge_acc_vals, merge_rej_vals = [], []
         q_expand_vals, q_diverse_vals = [], []
         gls_parent_vals, gls_backup_vals = [], []
@@ -132,6 +139,9 @@ def main():
             varproxy_vals.append(th["weighted_parent_var_proxy_mean"])
             ece_vals.append(th["ece_proxy_mean"])
             temp_vals.append(th["temperature_scale_mean"])
+            qhat_vals.append(th["theory6_coverage_rate_qhat"])
+            lockin_prod_vals.append(th["theory6_lockin_upper_bound_prod"])
+            lockin_minq_vals.append(th["theory6_lockin_upper_bound_minq"])
             merge_acc_vals.append(th["merge_hypothesis_accept_count"])
             merge_rej_vals.append(th["merge_hypothesis_reject_count"])
             q_expand_vals.append(th["q_controller_expand_candidates_mean"])
@@ -152,6 +162,9 @@ def main():
                     "weighted_parent_var_proxy_mean": th["weighted_parent_var_proxy_mean"],
                     "ece_proxy_mean": th["ece_proxy_mean"],
                     "temperature_scale_mean": th["temperature_scale_mean"],
+                    "theory6_coverage_rate_qhat": th["theory6_coverage_rate_qhat"],
+                    "theory6_lockin_upper_bound_prod": th["theory6_lockin_upper_bound_prod"],
+                    "theory6_lockin_upper_bound_minq": th["theory6_lockin_upper_bound_minq"],
                     "merge_hypothesis_accept_count": th["merge_hypothesis_accept_count"],
                     "merge_hypothesis_reject_count": th["merge_hypothesis_reject_count"],
                     "q_controller_expand_candidates_mean": th["q_controller_expand_candidates_mean"],
@@ -182,6 +195,9 @@ def main():
                 "weighted_parent_var_proxy_mean": mean(varproxy_vals) if varproxy_vals else float("nan"),
                 "ece_proxy_mean": mean(ece_vals) if ece_vals else float("nan"),
                 "temperature_scale_mean": mean(temp_vals) if temp_vals else float("nan"),
+                "theory6_coverage_rate_qhat": mean(qhat_vals) if qhat_vals else float("nan"),
+                "theory6_lockin_upper_bound_prod": mean(lockin_prod_vals) if lockin_prod_vals else float("nan"),
+                "theory6_lockin_upper_bound_minq": mean(lockin_minq_vals) if lockin_minq_vals else float("nan"),
                 "merge_hypothesis_accept_count": mean(merge_acc_vals) if merge_acc_vals else float("nan"),
                 "merge_hypothesis_reject_count": mean(merge_rej_vals) if merge_rej_vals else float("nan"),
                 "q_controller_expand_candidates_mean": mean(q_expand_vals) if q_expand_vals else float("nan"),
@@ -207,6 +223,9 @@ def main():
                 "weighted_parent_var_proxy_mean",
                 "ece_proxy_mean",
                 "temperature_scale_mean",
+                "theory6_coverage_rate_qhat",
+                "theory6_lockin_upper_bound_prod",
+                "theory6_lockin_upper_bound_minq",
                 "merge_hypothesis_accept_count",
                 "merge_hypothesis_reject_count",
                 "q_controller_expand_candidates_mean",
