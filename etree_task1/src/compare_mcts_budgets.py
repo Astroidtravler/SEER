@@ -56,6 +56,15 @@ def load_theory_stats(output_dir: str):
         "weighted_parent_var_proxy_mean": [],
         "ece_proxy_mean": [],
         "temperature_scale_mean": [],
+        "merge_hypothesis_accept_count": [],
+        "merge_hypothesis_reject_count": [],
+        "q_controller_expand_candidates_mean": [],
+        "q_controller_diverse_expand_count": [],
+        "gls_parent_applied_count": [],
+        "gls_backup_applied_count": [],
+        "duplicate_key_rate": [],
+        "invalid_action_rate": [],
+        "effective_expansion_ratio": [],
     }
     with open(pred_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -93,10 +102,11 @@ def main():
     seeds = [int(x) for x in args.seeds.split(",") if x.strip()]
 
     variants = [
-        ("mcts_tree", "--mcts_strict_dag_backprop False --mcts_weighted_return False --mcts_entropy_ucb False"),
-        ("mcts_dag", "--mcts_strict_dag_backprop True --mcts_weighted_return False --mcts_entropy_ucb False"),
-        ("mcts_dag_weighted", "--mcts_strict_dag_backprop True --mcts_weighted_return True --mcts_entropy_ucb False"),
-        ("mcts_full", "--mcts_strict_dag_backprop True --mcts_weighted_return True --mcts_entropy_ucb True"),
+        ("mcts_base_graph", "--mcts_merge_paradigm hash --mcts_q_controller False --mcts_measurement_model single --mcts_gls_mode none"),
+        ("mcts_2p2_wo_merge_test", "--mcts_merge_paradigm hash --mcts_q_controller True --mcts_measurement_model self_consistency --mcts_gls_mode cluster"),
+        ("mcts_2p2_wo_q_controller", "--mcts_merge_paradigm hypothesis_test --mcts_q_controller False --mcts_measurement_model self_consistency --mcts_gls_mode cluster"),
+        ("mcts_2p2_wo_gls", "--mcts_merge_paradigm hypothesis_test --mcts_q_controller True --mcts_measurement_model self_consistency --mcts_gls_mode none"),
+        ("mcts_2p2_full", "--mcts_merge_paradigm hypothesis_test --mcts_q_controller True --mcts_measurement_model self_consistency --mcts_gls_mode cluster"),
     ]
 
     per_run_rows = []
@@ -106,6 +116,10 @@ def main():
         vals = []
         residual_vals, calib_vals, varproxy_vals = [], [], []
         ece_vals, temp_vals = [], []
+        merge_acc_vals, merge_rej_vals = [], []
+        q_expand_vals, q_diverse_vals = [], []
+        gls_parent_vals, gls_backup_vals = [], []
+        dup_key_vals, invalid_vals, eff_expand_vals = [], [], []
         for seed in seeds:
             cmd = f"{args.base_cmd} --seed {seed} --mcts_simulations {args.simulations} {extra}"
             run_cmd(cmd)
@@ -118,6 +132,15 @@ def main():
             varproxy_vals.append(th["weighted_parent_var_proxy_mean"])
             ece_vals.append(th["ece_proxy_mean"])
             temp_vals.append(th["temperature_scale_mean"])
+            merge_acc_vals.append(th["merge_hypothesis_accept_count"])
+            merge_rej_vals.append(th["merge_hypothesis_reject_count"])
+            q_expand_vals.append(th["q_controller_expand_candidates_mean"])
+            q_diverse_vals.append(th["q_controller_diverse_expand_count"])
+            gls_parent_vals.append(th["gls_parent_applied_count"])
+            gls_backup_vals.append(th["gls_backup_applied_count"])
+            dup_key_vals.append(th["duplicate_key_rate"])
+            invalid_vals.append(th["invalid_action_rate"])
+            eff_expand_vals.append(th["effective_expansion_ratio"])
             per_run_rows.append(
                 {
                     "variant": name,
@@ -129,6 +152,15 @@ def main():
                     "weighted_parent_var_proxy_mean": th["weighted_parent_var_proxy_mean"],
                     "ece_proxy_mean": th["ece_proxy_mean"],
                     "temperature_scale_mean": th["temperature_scale_mean"],
+                    "merge_hypothesis_accept_count": th["merge_hypothesis_accept_count"],
+                    "merge_hypothesis_reject_count": th["merge_hypothesis_reject_count"],
+                    "q_controller_expand_candidates_mean": th["q_controller_expand_candidates_mean"],
+                    "q_controller_diverse_expand_count": th["q_controller_diverse_expand_count"],
+                    "gls_parent_applied_count": th["gls_parent_applied_count"],
+                    "gls_backup_applied_count": th["gls_backup_applied_count"],
+                    "duplicate_key_rate": th["duplicate_key_rate"],
+                    "invalid_action_rate": th["invalid_action_rate"],
+                    "effective_expansion_ratio": th["effective_expansion_ratio"],
                     "output_dir": latest,
                 }
             )
@@ -150,6 +182,15 @@ def main():
                 "weighted_parent_var_proxy_mean": mean(varproxy_vals) if varproxy_vals else float("nan"),
                 "ece_proxy_mean": mean(ece_vals) if ece_vals else float("nan"),
                 "temperature_scale_mean": mean(temp_vals) if temp_vals else float("nan"),
+                "merge_hypothesis_accept_count": mean(merge_acc_vals) if merge_acc_vals else float("nan"),
+                "merge_hypothesis_reject_count": mean(merge_rej_vals) if merge_rej_vals else float("nan"),
+                "q_controller_expand_candidates_mean": mean(q_expand_vals) if q_expand_vals else float("nan"),
+                "q_controller_diverse_expand_count": mean(q_diverse_vals) if q_diverse_vals else float("nan"),
+                "gls_parent_applied_count": mean(gls_parent_vals) if gls_parent_vals else float("nan"),
+                "gls_backup_applied_count": mean(gls_backup_vals) if gls_backup_vals else float("nan"),
+                "duplicate_key_rate": mean(dup_key_vals) if dup_key_vals else float("nan"),
+                "invalid_action_rate": mean(invalid_vals) if invalid_vals else float("nan"),
+                "effective_expansion_ratio": mean(eff_expand_vals) if eff_expand_vals else float("nan"),
             }
         )
 
@@ -166,6 +207,15 @@ def main():
                 "weighted_parent_var_proxy_mean",
                 "ece_proxy_mean",
                 "temperature_scale_mean",
+                "merge_hypothesis_accept_count",
+                "merge_hypothesis_reject_count",
+                "q_controller_expand_candidates_mean",
+                "q_controller_diverse_expand_count",
+                "gls_parent_applied_count",
+                "gls_backup_applied_count",
+                "duplicate_key_rate",
+                "invalid_action_rate",
+                "effective_expansion_ratio",
                 "output_dir",
             ],
         )
